@@ -27,15 +27,24 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
         ".releaserc.json",
         "CHANGELOG.md",
         "LICENSE",
+        "target"
     ]
     .into_iter()
     .collect();
 
     if recursive {
-        for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+        // Use filter_entry to prune excluded directories from traversal
+        for entry in WalkDir::new(path)
+            .into_iter()
+            .filter_entry(|e| {
+                // Always include the root; apply exclusions to children
+                if e.depth() == 0 { return true; }
+                let name = e.file_name().to_str().unwrap_or("");
+                !excluded.contains(name)
+            })
+            .filter_map(|e| e.ok())
+        {
             let p = entry.path();
-            let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-            if excluded.contains(name) { continue; }
             if p.is_dir() { continue; }
             if p.is_file() {
                 match file_extractor::extract_text(p) {
