@@ -18,6 +18,7 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
     "charts",
     "chats",
     "package-lock.json",
+    "Cargo.lock",
     ".idea",
     ".gitignore",
     ".git",

@@ -43,7 +43,7 @@ pub fn run_app() -> Result<()> {
 
   // main loop
   let commands = vec![
-    ("Direct Chat Input", "chat"),
+    ("Chat Input", "chat"),
     ("Multi-line Input", "multi"),
     ("File", "file"),
     ("Directory", "dir"),
@@ -54,7 +54,6 @@ pub fn run_app() -> Result<()> {
     ("Git Repository", "git"),
     ("Save Chat Session", "save"),
     ("Exit Application", "exit"),
-    // Future: pdf/xlsx/image/dir/git/web
   ];
   loop {
     let choice = Select::new(
@@ -319,7 +318,7 @@ fn review_and_send(
 ) -> Result<()> {
   // Optional directive to prepend (disabled for direct chat input)
   if allow_directive {
-    if Confirm::new("Add a directive?").with_default(false).prompt()? {
+    if Confirm::new("Add a directive?").with_default(true).prompt()? {
       let directive = Text::new("Enter a directive:").prompt()?;
       session.append_message_to_file("\n\n***\n\n### User:\n")?;
       session.append_message_to_file(&directive)?;

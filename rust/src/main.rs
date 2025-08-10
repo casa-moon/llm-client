@@ -12,10 +12,6 @@ use std::path::Path;
 fn main() -> Result<()> {
   // Load environment variables from .env if present
   let _ = dotenv();
-  // Also try loading from project javascript/.env for parity with JS app
-  if Path::new("javascript/.env").exists() {
-    let _ = from_path("javascript/.env");
-  }
-
+  
   ui::run_app()
 }
