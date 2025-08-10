@@ -1,7 +1,10 @@
+
 use anyhow::{anyhow, Result};
 use std::io::Cursor;
 use image::{GenericImageView, ImageReader};
 use scraper::{Html, Selector};
+use indicatif::{ProgressBar, ProgressStyle};
+use std::time::Duration;
 use std::collections::{HashSet, VecDeque};
 use url::Url;
 
@@ -103,23 +106,58 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
       }
     }
 
+    // Show a spinner while fetching images for this page
+    let mut fetched = 0usize;
+    let total = imgs.len();
+    let spinner = if total > 0 {
+      let s = ProgressBar::new_spinner();
+      s.set_style(
+        ProgressStyle::with_template("{spinner} {msg}")
+          .unwrap()
+          .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+      );
+       
+      
+      s.enable_steady_tick(Duration::from_millis(80));
+      s.set_message(format!("Fetching {} images from {}", total, url));
+      Some(s)
+    } else { None };
+
     for img_url in imgs {
       // avoid re-processing the same image URL
       if visited.contains(&img_url) { continue; }
       visited.insert(img_url.clone());
 
       // Attempt to fetch image and get dimensions
+      if let Some(s) = &spinner { s.set_message(format!("Fetching image {}/{}", fetched + 1, total)); }
       if let Ok(resp) = client.get(&img_url).send() {
         if resp.status().is_success() {
+          let ct = resp.headers().get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_ascii_lowercase());
           if let Ok(bytes) = resp.bytes() {
-            // Skip SVG by quick heuristic
-            if img_url.to_lowercase().ends_with(".svg") {
-              // add as URL but no token count
-              session.append_message_to_file(&format!("\n- {}\n", img_url)).ok();
-              out.push(Message { role: Role::User, kind: MsgType::Text, content: img_url.clone() });
-              out.push(Message { role: Role::User, kind: MsgType::Image, content: img_url.clone() });
+            let is_svg = img_url.to_ascii_lowercase().ends_with(".svg")
+              || ct.as_deref().map(|s| s.contains("image/svg+xml")).unwrap_or(false)
+              || std::str::from_utf8(&bytes).map(|s| s.trim_start().starts_with("<svg")).unwrap_or(false);
+
+            if is_svg {
+              // Rasterize to PNG and embed as data URL
+              if let Ok((data_url, w, h)) = crate::extractor::svg::rasterize_svg_to_png_b64(session, &bytes) {
+                if w < 200 || h < 200 { continue; }
+                let tokens = count_image_tokens(w as usize, h as usize);
+                session.image_token_count += tokens;
+                session.append_message_to_file(&format!("\n- {}\n", img_url)).ok();
+                out.push(Message { role: Role::User, kind: MsgType::Text, content: img_url.clone() });
+                out.push(Message { role: Role::User, kind: MsgType::Image, content: data_url });
+              } else {
+                // Fallback: include original URL if rasterization fails
+                session.append_message_to_file(&format!("\n- {}\n", img_url)).ok();
+                out.push(Message { role: Role::User, kind: MsgType::Text, content: img_url.clone() });
+                out.push(Message { role: Role::User, kind: MsgType::Image, content: img_url.clone() });
+              }
               continue;
             }
+
             let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format();
             if let Ok(rdr) = reader {
               if let Ok(img) = rdr.decode() {
@@ -136,7 +174,10 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
           }
         }
       }
+      fetched += 1;
     }
+
+    if let Some(s) = spinner { s.finish_with_message(format!("Fetched {} images", fetched)); }
 
     if d > 0 {
       for a in doc.select(&link_sel) {

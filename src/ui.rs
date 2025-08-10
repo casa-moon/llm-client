@@ -252,7 +252,7 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
       println!("{} {}", "Error:".red().bold(), e.to_string().red());
       if std::env::var("RUST_BACKTRACE").is_ok() {
         println!("{}", "Stack trace:".bright_black());
-        println!("{:#?}", e);
+        println!("{:#?}\n", e);
       } else {
         println!("{}", "(set RUST_BACKTRACE=1 to see a stack trace)".bright_black());
       }
