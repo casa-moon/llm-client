@@ -1,7 +1,7 @@
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 
-use crate::api::{create_client, API_CHOICES, Client};
+use crate::api::{create_client, API_CHOICES, Client, ModelResponse};
 use crate::message_log::{Message, MessageLog, MsgType, Role};
 use image::{GenericImageView, ImageReader};
 use crate::session::ChatSession;
@@ -240,19 +240,29 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
       .unwrap()
       .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
   );
-  pb.set_message("Contacting model...");
+  //pb.set_message("Contacting model...");
   pb.enable_steady_tick(Duration::from_millis(80));
 
   // In JS, there's a confirmation step; skip for initial port
   let result = client.send_message(model, &log);
   pb.finish_and_clear();
-  let response = result?;
+  let response: ModelResponse = result?;
+
+  // Print the raw response object first, excluding any `choices` key
+  let mut raw_filtered = response.raw.clone();
+  if let serde_json::Value::Object(ref mut map) = raw_filtered {
+    let _ = map.remove("choices");
+    let _ = map.remove("candidates");
+  }
+  let pretty = serde_json::to_string_pretty(&raw_filtered)?;
+  println!("{}", pretty);
 
   // Add to log and display
-  log.add_model(response.clone());
+  log.add_model(response.text.clone());
   session.append_message_to_file("\n\n### Assistant:\n")?;
-  session.append_message_to_file(&response)?;
-  let rendered = markdown::render(&response);
+  session.append_message_to_file(&response.text)?;
+  let rendered = markdown::render(&response.text);
+  println!("\n{}:", model);
   println!("{}", rendered);
   Ok(())
 }
@@ -317,7 +327,7 @@ fn estimate_image_tokens(url: &str, session: &mut ChatSession) -> Result<()> {
   if !resp.status().is_success() { return Ok(()); }
   let bytes = resp.bytes()?;
   let reader = ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format();
-  if let Ok(mut rdr) = reader {
+  if let Ok(rdr) = reader {
     if let Ok(img) = rdr.decode() {
       let (w, h) = img.dimensions();
       if w >= 200 && h >= 200 {

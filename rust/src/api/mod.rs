@@ -1,5 +1,6 @@
 use crate::message_log::{Message, MessageLog, MsgType, Role};
 use anyhow::{anyhow, Result};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TemplateKey {
@@ -11,10 +12,16 @@ pub enum TemplateKey {
   Ollama,
 }
 
+#[derive(Debug, Clone)]
+pub struct ModelResponse {
+  pub raw: Value,
+  pub text: String,
+}
+
 pub trait ApiClient {
   fn name(&self) -> &'static str;
   fn template(&self) -> TemplateKey;
-  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String>;
+  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse>;
 }
 
 pub struct OpenAIClient {
@@ -28,7 +35,7 @@ impl OpenAIClient {
 impl ApiClient for OpenAIClient {
   fn name(&self) -> &'static str { "openai" }
   fn template(&self) -> TemplateKey { TemplateKey::OpenAI }
-  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String> {
+  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::blocking::Client as HttpClient;
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 
@@ -52,26 +59,15 @@ impl ApiClient for OpenAIClient {
       return Err(anyhow!("OpenAI API error: {} - {}", status, txt));
     }
 
-    #[derive(serde::Deserialize)]
-    struct ChatChoiceMsg {
-      content: String,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChatChoice {
-      message: ChatChoiceMsg,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChatResp {
-      choices: Vec<ChatChoice>,
-    }
-
-    let parsed: ChatResp = resp.json()?;
-    let text = parsed
-      .choices
-      .get(0)
-      .map(|c| c.message.content.clone())
-      .unwrap_or_default();
-    Ok(text)
+    let raw: Value = resp.json()?;
+    let text = raw
+      .get("choices").and_then(|c| c.get(0))
+      .and_then(|c| c.get("message"))
+      .and_then(|m| m.get("content"))
+      .and_then(|s| s.as_str())
+      .unwrap_or_default()
+      .to_string();
+    Ok(ModelResponse { raw, text })
   }
 }
 
@@ -82,7 +78,7 @@ impl AnthropicClient { pub fn new(api_key: String) -> Self { Self { api_key } } 
 impl ApiClient for AnthropicClient {
   fn name(&self) -> &'static str { "anthropic" }
   fn template(&self) -> TemplateKey { TemplateKey::Anthropic }
-  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String> {
+  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::blocking::Client as HttpClient;
     let payload = transform_messages(log.raw(), self.template())?;
     // For Anthropics Messages API, messages is a list with role and content string
@@ -104,17 +100,14 @@ impl ApiClient for AnthropicClient {
       let txt = resp.text().unwrap_or_default();
       return Err(anyhow!("Anthropic API error: {} - {}", status, txt));
     }
-    #[derive(serde::Deserialize)]
-    struct ContentItem {
-      text: Option<String>,
-    }
-    #[derive(serde::Deserialize)]
-    struct AnthResp {
-      content: Vec<ContentItem>,
-    }
-    let parsed: AnthResp = resp.json()?;
-    let text = parsed.content.get(0).and_then(|c| c.text.clone()).unwrap_or_default();
-    Ok(text)
+    let raw: Value = resp.json()?;
+    let text = raw
+      .get("content").and_then(|c| c.get(0))
+      .and_then(|p| p.get("text"))
+      .and_then(|s| s.as_str())
+      .unwrap_or_default()
+      .to_string();
+    Ok(ModelResponse { raw, text })
   }
 }
 
@@ -125,7 +118,7 @@ impl GoogleClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
 impl ApiClient for GoogleClient {
   fn name(&self) -> &'static str { "google" }
   fn template(&self) -> TemplateKey { TemplateKey::Google }
-  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String> {
+  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::blocking::Client as HttpClient;
     let contents = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({
@@ -144,30 +137,16 @@ impl ApiClient for GoogleClient {
       let txt = resp.text().unwrap_or_default();
       return Err(anyhow!("Google API error: {} - {}", status, txt));
     }
-    #[derive(serde::Deserialize)]
-    struct Part {
-      text: Option<String>,
-    }
-    #[derive(serde::Deserialize)]
-    struct Content {
-      parts: Vec<Part>,
-    }
-    #[derive(serde::Deserialize)]
-    struct Candidate {
-      content: Content,
-    }
-    #[derive(serde::Deserialize)]
-    struct Resp {
-      candidates: Vec<Candidate>,
-    }
-
-    let parsed: Resp = resp.json()?;
-    let text = parsed
-      .candidates
-      .get(0)
-      .map(|c| c.content.parts.iter().filter_map(|p| p.text.clone()).collect::<Vec<_>>().join("\n"))
+    let raw: Value = resp.json()?;
+    // candidates[0].content.parts[].text joined by newline
+    let text = raw.get("candidates")
+      .and_then(|c| c.get(0))
+      .and_then(|cand| cand.get("content"))
+      .and_then(|content| content.get("parts"))
+      .and_then(|parts| parts.as_array().cloned())
+      .map(|arr| arr.into_iter().filter_map(|p| p.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())).collect::<Vec<_>>().join("\n"))
       .unwrap_or_default();
-    Ok(text)
+    Ok(ModelResponse { raw, text })
   }
 }
 
@@ -178,7 +157,7 @@ impl PerplexityClient { pub fn new(api_key: String) -> Self { Self { api_key } }
 impl ApiClient for PerplexityClient {
   fn name(&self) -> &'static str { "perplexity" }
   fn template(&self) -> TemplateKey { TemplateKey::Perplexity }
-  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String> {
+  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::blocking::Client as HttpClient;
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
     let payload = transform_messages(log.raw(), self.template())?;
@@ -200,25 +179,15 @@ impl ApiClient for PerplexityClient {
       let txt = resp.text().unwrap_or_default();
       return Err(anyhow!("Perplexity API error: {} - {}", status, txt));
     }
-    #[derive(serde::Deserialize)]
-    struct ChatChoiceMsg {
-      content: String,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChatChoice {
-      message: ChatChoiceMsg,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChatResp {
-      choices: Vec<ChatChoice>,
-    }
-    let parsed: ChatResp = resp.json()?;
-    let text = parsed
-      .choices
-      .get(0)
-      .map(|c| c.message.content.clone())
-      .unwrap_or_default();
-    Ok(text)
+    let raw: Value = resp.json()?;
+    let text = raw
+      .get("choices").and_then(|c| c.get(0))
+      .and_then(|c| c.get("message"))
+      .and_then(|m| m.get("content"))
+      .and_then(|s| s.as_str())
+      .unwrap_or_default()
+      .to_string();
+    Ok(ModelResponse { raw, text })
   }
 }
 
@@ -229,7 +198,7 @@ impl MistralClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
 impl ApiClient for MistralClient {
   fn name(&self) -> &'static str { "mistral" }
   fn template(&self) -> TemplateKey { TemplateKey::Mistral }
-  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String> {
+  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::blocking::Client as HttpClient;
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
     let payload = transform_messages(log.raw(), self.template())?;
@@ -251,25 +220,15 @@ impl ApiClient for MistralClient {
       let txt = resp.text().unwrap_or_default();
       return Err(anyhow!("Mistral API error: {} - {}", status, txt));
     }
-    #[derive(serde::Deserialize)]
-    struct ChatChoiceMsg {
-      content: String,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChatChoice {
-      message: ChatChoiceMsg,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChatResp {
-      choices: Vec<ChatChoice>,
-    }
-    let parsed: ChatResp = resp.json()?;
-    let text = parsed
-      .choices
-      .get(0)
-      .map(|c| c.message.content.clone())
-      .unwrap_or_default();
-    Ok(text)
+    let raw: Value = resp.json()?;
+    let text = raw
+      .get("choices").and_then(|c| c.get(0))
+      .and_then(|c| c.get("message"))
+      .and_then(|m| m.get("content"))
+      .and_then(|s| s.as_str())
+      .unwrap_or_default()
+      .to_string();
+    Ok(ModelResponse { raw, text })
   }
 }
 
@@ -278,7 +237,7 @@ impl OllamaClient { pub fn new() -> Self { Self {} } }
 impl ApiClient for OllamaClient {
   fn name(&self) -> &'static str { "ollama" }
   fn template(&self) -> TemplateKey { TemplateKey::Ollama }
-  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String> {
+  fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::blocking::Client as HttpClient;
     // Build simple role+content messages for Ollama chat
     let msgs = build_ollama_messages(log)?;
@@ -297,16 +256,14 @@ impl ApiClient for OllamaClient {
       let txt = resp.text().unwrap_or_default();
       return Err(anyhow!("Ollama API error: {} - {}", status, txt));
     }
-    #[derive(serde::Deserialize)]
-    struct Message {
-      content: String,
-    }
-    #[derive(serde::Deserialize)]
-    struct Resp {
-      message: Message,
-    }
-    let parsed: Resp = resp.json()?;
-    Ok(parsed.message.content)
+    let raw: Value = resp.json()?;
+    let text = raw
+      .get("message")
+      .and_then(|m| m.get("content"))
+      .and_then(|s| s.as_str())
+      .unwrap_or_default()
+      .to_string();
+    Ok(ModelResponse { raw, text })
   }
 }
 
@@ -520,7 +477,7 @@ impl Client {
     }
   }
 
-  pub fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<String> {
+  pub fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     match self {
       Client::OpenAI(c) => c.send_message(model, log),
       Client::Google(c) => c.send_message(model, log),

@@ -10,7 +10,7 @@ use crate::session::ChatSession;
 
 pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Result<Vec<Message>> {
   let mut out: Vec<Message> = Vec::new();
-  let mut excluded: HashSet<&str> = [
+  let excluded: HashSet<&str> = [
     "node_modules",
     "temp",
     "archive",
