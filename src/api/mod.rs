@@ -36,7 +36,6 @@ impl ApiClient for OpenAIClient {
   fn name(&self) -> &'static str { "openai" }
   fn template(&self) -> TemplateKey { TemplateKey::OpenAI }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
-    use reqwest::blocking::Client as HttpClient;
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 
     let payload = transform_messages(log.raw(), self.template())?;
@@ -45,7 +44,7 @@ impl ApiClient for OpenAIClient {
             "messages": payload
         });
 
-    let http = HttpClient::new();
+    let http = crate::http::http_client()?;
     let resp = http
       .post("https://api.openai.com/v1/chat/completions")
       .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
@@ -79,7 +78,6 @@ impl ApiClient for AnthropicClient {
   fn name(&self) -> &'static str { "anthropic" }
   fn template(&self) -> TemplateKey { TemplateKey::Anthropic }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
-    use reqwest::blocking::Client as HttpClient;
     let payload = transform_messages(log.raw(), self.template())?;
     // For Anthropics Messages API, messages is a list with role and content string
     let body = serde_json::json!({
@@ -88,7 +86,7 @@ impl ApiClient for AnthropicClient {
             "temperature": 0,
             "messages": payload
         });
-    let http = HttpClient::new();
+    let http = crate::http::http_client()?;
     let resp = http
       .post("https://api.anthropic.com/v1/messages")
       .header("x-api-key", &self.api_key)
@@ -119,7 +117,6 @@ impl ApiClient for GoogleClient {
   fn name(&self) -> &'static str { "google" }
   fn template(&self) -> TemplateKey { TemplateKey::Google }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
-    use reqwest::blocking::Client as HttpClient;
     let contents = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({
             "contents": contents,
@@ -130,7 +127,7 @@ impl ApiClient for GoogleClient {
       "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
       model, self.api_key
     );
-    let http = HttpClient::new();
+    let http = crate::http::http_client()?;
     let resp = http.post(&url).json(&body).send()?;
     if !resp.status().is_success() {
       let status = resp.status();
@@ -158,7 +155,6 @@ impl ApiClient for PerplexityClient {
   fn name(&self) -> &'static str { "perplexity" }
   fn template(&self) -> TemplateKey { TemplateKey::Perplexity }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
-    use reqwest::blocking::Client as HttpClient;
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
     let payload = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({
@@ -167,7 +163,7 @@ impl ApiClient for PerplexityClient {
             "temperature": 0,
             "messages": payload
         });
-    let http = HttpClient::new();
+    let http = crate::http::http_client()?;
     let resp = http
       .post("https://api.perplexity.ai/chat/completions")
       .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
@@ -199,7 +195,6 @@ impl ApiClient for MistralClient {
   fn name(&self) -> &'static str { "mistral" }
   fn template(&self) -> TemplateKey { TemplateKey::Mistral }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
-    use reqwest::blocking::Client as HttpClient;
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
     let payload = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({
@@ -208,7 +203,7 @@ impl ApiClient for MistralClient {
             "temperature": 0,
             "messages": payload
         });
-    let http = HttpClient::new();
+    let http = crate::http::http_client()?;
     let resp = http
       .post("https://api.mistral.ai/v1/chat/completions")
       .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
@@ -238,7 +233,6 @@ impl ApiClient for OllamaClient {
   fn name(&self) -> &'static str { "ollama" }
   fn template(&self) -> TemplateKey { TemplateKey::Ollama }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
-    use reqwest::blocking::Client as HttpClient;
     // Build simple role+content messages for Ollama chat
     let msgs = build_ollama_messages(log)?;
     let body = serde_json::json!({
@@ -246,7 +240,7 @@ impl ApiClient for OllamaClient {
             "messages": msgs,
             "stream": false
         });
-    let http = HttpClient::new();
+    let http = crate::http::http_client()?;
     let resp = http
       .post("http://localhost:11434/api/chat")
       .json(&body)
@@ -297,7 +291,6 @@ fn build_ollama_messages(log: &MessageLog) -> Result<Vec<serde_json::Value>> {
 }
 
 pub fn list_ollama_models() -> Result<Vec<String>> {
-  use reqwest::blocking::Client as HttpClient;
   #[derive(serde::Deserialize)]
   struct Tag {
     name: String,
@@ -306,7 +299,7 @@ pub fn list_ollama_models() -> Result<Vec<String>> {
   struct Tags {
     models: Vec<Tag>,
   }
-  let http = HttpClient::new();
+  let http = crate::http::http_client()?;
   let resp = http.get("http://localhost:11434/api/tags").send()?;
   if !resp.status().is_success() {
     let status = resp.status();
@@ -436,8 +429,8 @@ pub struct ApiChoice {
 }
 
 pub const API_CHOICES: &[ApiChoice] = &[
-  ApiChoice { key: "1", label: "gpt-5", env: "OPENAI_API_KEY", model: "gpt-5" },
-  ApiChoice { key: "2", label: "gpt-4.1", env: "OPENAI_API_KEY", model: "gpt-4.1" },
+  ApiChoice { key: "1", label: "gpt-4.1", env: "OPENAI_API_KEY", model: "gpt-4.1" },
+  ApiChoice { key: "2", label: "gpt-5", env: "OPENAI_API_KEY", model: "gpt-5" },
   ApiChoice { key: "3", label: "gemini-1.5-pro-latest", env: "GOOGLE_AI_API_KEY", model: "gemini-1.5-pro-latest" },
   ApiChoice { key: "4", label: "claude-3-5-sonnet-20240620", env: "ANTHROPIC_API_KEY", model: "claude-3-5-sonnet-20240620" },
   ApiChoice { key: "5", label: "llama-3.1-sonar-large-128k-chat", env: "PERPLEXITY_API_KEY", model: "llama-3.1-sonar-large-128k-chat" },

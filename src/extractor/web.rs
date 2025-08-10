@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use reqwest::blocking::Client;
 use std::io::Cursor;
 use image::{GenericImageView, ImageReader};
 use scraper::{Html, Selector};
@@ -11,7 +10,7 @@ use crate::session::ChatSession;
 
 pub fn extract_text(session: &ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
   let base = Url::parse(start_url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
-  let client = Client::builder().build()?;
+  let client = crate::http::http_client()?;
   let mut visited: HashSet<String> = HashSet::new();
   let mut queue: VecDeque<(Url, usize)> = VecDeque::new();
   queue.push_back((base.clone(), depth));
@@ -69,7 +68,7 @@ fn same_host(a: &Url, b: &Url) -> bool { a.domain() == b.domain() }
 
 pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
   let base = Url::parse(start_url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
-  let client = Client::builder().build()?;
+  let client = crate::http::http_client()?;
   let mut visited: HashSet<String> = HashSet::new();
   let mut queue: VecDeque<(Url, usize)> = VecDeque::new();
   queue.push_back((base.clone(), depth));

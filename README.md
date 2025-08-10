@@ -41,6 +41,7 @@ The user interacts through an interactive prompt, picks a model and a command, r
 
 1. **Startup & Environment**
    - `.env` or environment variables provide API keys.
+   - Optional request timeout via `REQUEST_TIMEOUT_SECS` (default 60).
    - Session directories are created under `~/.chatgpt-client/` (or Termux location).
 
 2. **Interactive Loop (`src/ui.rs`)**
@@ -76,7 +77,7 @@ The user interacts through an interactive prompt, picks a model and a command, r
 
 - **Cargo.toml**: Rust dependencies — includes HTTP, JSON, PDF/image processing, UI prompts, etc.
 - **README.md**: Project description, usage, setup, and current limitations.
-- **.env / .env.example**: API keys for providers.
+- **.env / .env.example**: API keys for providers; `REQUEST_TIMEOUT_SECS` to set default HTTP timeout.
 - **src/main.rs**: Entry point; boots up the CLI app.
 - **src/ui.rs**: Main interactive loop for all commands and session handling.
 - **src/api/**: Provider-specific API client code and JSON message transformation logic.
@@ -94,4 +95,3 @@ The user interacts through an interactive prompt, picks a model and a command, r
 5. You confirm to send (or cancel).
 6. The data is sent to the API, and a markdown-formatted reply is shown.
 7. This loop continues; on exit, you can keep or delete the session log.
-

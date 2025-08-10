@@ -377,7 +377,7 @@ fn estimate_text_tokens_for_msgs(msgs: &[Message]) -> usize {
 
 fn estimate_image_tokens(url: &str, session: &mut ChatSession) -> Result<()> {
   if !(url.starts_with("http://") || url.starts_with("https://")) { return Ok(()); }
-  let client = reqwest::blocking::Client::new();
+  let client = crate::http::http_client()?;
   let resp = client.get(url).send()?;
   if !resp.status().is_success() { return Ok(()); }
   let bytes = resp.bytes()?;

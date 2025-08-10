@@ -1,4 +1,5 @@
 mod api;
+mod http;
 mod extractor;
 mod message_log;
 mod session;
