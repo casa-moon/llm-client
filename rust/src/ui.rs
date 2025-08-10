@@ -6,8 +6,7 @@ use crate::message_log::{Message, MessageLog, MsgType, Role};
 use image::{GenericImageView, ImageReader};
 use crate::session::ChatSession;
 use crate::extractor::file as file_extractor;
-// Termimad for terminal markdown rendering
-use termimad;
+use termimad; // terminal markdown rendering
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use std::time::Duration;
@@ -251,6 +250,12 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
     Ok(r) => r,
     Err(e) => {
       println!("{} {}", "Error:".red().bold(), e.to_string().red());
+      if std::env::var("RUST_BACKTRACE").is_ok() {
+        println!("{}", "Stack trace:".bright_black());
+        println!("{:#?}", e);
+      } else {
+        println!("{}", "(set RUST_BACKTRACE=1 to see a stack trace)".bright_black());
+      }
       // Keep the app running after an API failure
       return Ok(());
     }
