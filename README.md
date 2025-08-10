@@ -1,8 +1,4 @@
-# Rust Port of llm-client
-
-This is a Rust port (initial scaffold) of the JavaScript CLI in `javascript/`.
-It mirrors the core structure: interactive API selection, chat session handling,
-and message logging. API calls are currently stubbed (no outbound requests).
+# Rust llm-client
 
 ## Features
 - Interactive selection of API provider (OpenAI, Google, Anthropic, Perplexity, Mistral, Ollama)
