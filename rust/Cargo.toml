@@ -14,8 +14,8 @@ dirs = "5"
 dotenvy = "0.15"
 parking_lot = "0.12"
 dialoguer = "0.11"
-pulldown-cmark = "0.10"
 owo-colors = "4"
+termimad = "0.28"
 
 # HTTP client for provider integrations (blocking for simplicity)
 reqwest = { version = "0.12", features = ["json", "gzip", "blocking", "rustls-tls"] }

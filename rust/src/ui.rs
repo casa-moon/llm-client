@@ -6,7 +6,8 @@ use crate::message_log::{Message, MessageLog, MsgType, Role};
 use image::{GenericImageView, ImageReader};
 use crate::session::ChatSession;
 use crate::extractor::file as file_extractor;
-use crate::markdown;
+// Termimad for terminal markdown rendering
+use termimad;
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use std::time::Duration;
@@ -260,9 +261,9 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   log.add_model(response.text.clone());
   session.append_message_to_file(&format!("\n\n### {}:\n", model))?;
   session.append_message_to_file(&response.text)?;
-  let rendered = markdown::render(&response.text);
   println!("\n{}:", model);
-  println!("{}", rendered);
+  let mut skin = termimad::MadSkin::default();
+  skin.print_text(&response.text);
   Ok(())
 }
 

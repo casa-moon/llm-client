@@ -1,6 +1,5 @@
 mod api;
 mod extractor;
-mod markdown;
 mod message_log;
 mod session;
 mod ui;
