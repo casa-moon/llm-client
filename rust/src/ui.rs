@@ -247,7 +247,14 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   // In JS, there's a confirmation step; skip for initial port
   let result = client.send_message(model, &log);
   pb.finish_and_clear();
-  let response: ModelResponse = result?;
+  let response: ModelResponse = match result {
+    Ok(r) => r,
+    Err(e) => {
+      println!("{} {}", "Error:".red().bold(), e.to_string().red());
+      // Keep the app running after an API failure
+      return Ok(());
+    }
+  };
 
   // Print the raw response object first, excluding any `choices` key
   let mut raw_filtered = response.raw.clone();
@@ -264,6 +271,7 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   println!("\n{}:", model);
   let mut skin = termimad::MadSkin::default();
   skin.print_text(&response.text);
+  println!();
   Ok(())
 }
 
