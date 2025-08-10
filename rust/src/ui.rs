@@ -240,7 +240,7 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
       .unwrap()
       .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
   );
-  //pb.set_message("Contacting model...");
+  pb.set_message("Waiting for response...");
   pb.enable_steady_tick(Duration::from_millis(80));
 
   // In JS, there's a confirmation step; skip for initial port
