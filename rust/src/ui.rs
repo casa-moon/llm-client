@@ -8,6 +8,7 @@ use crate::session::ChatSession;
 use crate::extractor::file as file_extractor;
 use crate::markdown;
 use indicatif::{ProgressBar, ProgressStyle};
+use owo_colors::OwoColorize;
 use std::time::Duration;
 
 pub fn run_app() -> Result<()> {
@@ -254,17 +255,58 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
     let _ = map.remove("choices");
     let _ = map.remove("candidates");
   }
-  let pretty = serde_json::to_string_pretty(&raw_filtered)?;
-  println!("{}", pretty);
+  print_colored_json(&raw_filtered);
 
   // Add to log and display
   log.add_model(response.text.clone());
-  session.append_message_to_file("\n\n### Assistant:\n")?;
+  session.append_message_to_file(&format!("\n\n### {}:\n", model))?;
   session.append_message_to_file(&response.text)?;
   let rendered = markdown::render(&response.text);
   println!("\n{}:", model);
   println!("{}", rendered);
   Ok(())
+}
+
+fn print_colored_json(value: &serde_json::Value) {
+  fn helper(v: &serde_json::Value, indent: usize, out: &mut String) {
+    let pad = |n: usize| -> String { " ".repeat(n) };
+    match v {
+      serde_json::Value::Null => out.push_str(&format!("{}", "null".bright_black())),
+      serde_json::Value::Bool(b) => out.push_str(&format!("{}", if *b { "true".magenta() } else { "false".magenta() })),
+      serde_json::Value::Number(n) => out.push_str(&format!("{}", n.to_string().yellow())),
+      serde_json::Value::String(s) => out.push_str(&format!("\"{}\"", s.green())),
+      serde_json::Value::Array(arr) => {
+        if arr.is_empty() { out.push_str("[]"); return; }
+        out.push_str("[\n");
+        for (i, item) in arr.iter().enumerate() {
+          out.push_str(&pad(indent + 2));
+          helper(item, indent + 2, out);
+          if i + 1 != arr.len() { out.push(','); }
+          out.push('\n');
+        }
+        out.push_str(&pad(indent));
+        out.push(']');
+      }
+      serde_json::Value::Object(map) => {
+        if map.is_empty() { out.push_str("{}"); return; }
+        out.push_str("{\n");
+        let len = map.len();
+        for (idx, (k, val)) in map.iter().enumerate() {
+          out.push_str(&pad(indent + 2));
+          out.push_str(&format!("\"{}\"", k.bright_blue()));
+          out.push_str(": ");
+          helper(val, indent + 2, out);
+          if idx + 1 != len { out.push(','); }
+          out.push('\n');
+        }
+        out.push_str(&pad(indent));
+        out.push('}');
+      }
+    }
+  }
+  let mut s = String::new();
+  helper(value, 0, &mut s);
+  println!("{}", s);
 }
 
 fn review_and_send(
