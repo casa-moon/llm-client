@@ -30,3 +30,4 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 lopdf = "0.32"
 base64 = "0.22"
 flate2 = "1"
+indicatif = "0.17"

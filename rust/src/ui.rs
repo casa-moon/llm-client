@@ -7,6 +7,8 @@ use image::{GenericImageView, ImageReader};
 use crate::session::ChatSession;
 use crate::extractor::file as file_extractor;
 use crate::markdown;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::time::Duration;
 
 pub fn run_app() -> Result<()> {
   // choose API
@@ -75,7 +77,7 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&input)?;
         let temp_msgs = vec![Message { role: Role::User, kind: MsgType::Text, content: input }];
-        review_and_send(temp_msgs, &mut client, &model, &mut log, &mut session)?;
+        review_and_send(temp_msgs, &mut client, &model, &mut log, &mut session, false)?;
       }
       "multi" => {
         let input = match dialoguer::Editor::new().require_save(false).edit("\n# Enter multi-line input below\n") {
@@ -85,7 +87,7 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&input)?;
         let temp_msgs = vec![Message { role: Role::User, kind: MsgType::Text, content: input }];
-        review_and_send(temp_msgs, &mut client, &model, &mut log, &mut session)?;
+        review_and_send(temp_msgs, &mut client, &model, &mut log, &mut session, true)?;
       }
       "file" => {
         let path_str = Text::new("Enter path:").prompt()?;
@@ -111,7 +113,7 @@ pub fn run_app() -> Result<()> {
         // Extract text and review before sending
         match file_extractor::extract_text(&dest) {
           Ok(msgs) => {
-            review_and_send(msgs, &mut client, &model, &mut log, &mut session)?;
+            review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
           }
           Err(e) => {
             println!("\nFailed to extract file: {}\n", e);
@@ -133,7 +135,7 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&path_abs.to_string_lossy())?;
         match crate::extractor::dir::extract_dir(&session, &path_abs, recursive) {
-          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session)?; }
+          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
           Err(e) => println!("\nFailed to extract directory: {}\n", e),
         }
       }
@@ -156,7 +158,7 @@ pub fn run_app() -> Result<()> {
             Err(e) => println!("\nFailed to extract web images: {}\n", e),
           }
         }
-        review_and_send(total, &mut client, &model, &mut log, &mut session)?;
+        review_and_send(total, &mut client, &model, &mut log, &mut session, true)?;
       }
       "image" => {
         let url = Text::new("Enter image URL:").prompt()?;
@@ -165,7 +167,7 @@ pub fn run_app() -> Result<()> {
         // estimate tokens by fetching image dims
         if let Err(e) = estimate_image_tokens(&url, &mut session) { println!("Warning: could not estimate image tokens: {}", e); }
         let msgs = crate::extractor::image::extract_image(&url)?;
-        review_and_send(msgs, &mut client, &model, &mut log, &mut session)?;
+        review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
       }
       "pdf" => {
         let path_str = Text::new("Enter path:").prompt()?;
@@ -186,7 +188,7 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&path_abs.to_string_lossy())?;
         match crate::extractor::pdf::extract_pdf(&mut session, &path_abs, get_images) {
-          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session)?; }
+          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
           Err(e) => println!("\nFailed to extract pdf: {}\n", e),
         }
       }
@@ -202,7 +204,7 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&path_abs.to_string_lossy())?;
         match crate::extractor::xlsx::extract_xlsx(&path_abs) {
-          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session)?; }
+          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
           Err(e) => println!("\nFailed to extract xlsx: {}\n", e),
         }
       }
@@ -216,7 +218,7 @@ pub fn run_app() -> Result<()> {
             session.append_message_to_file("\n\n***\n\n### User:\n")?;
             session.append_message_to_file(&repo_url)?;
             match crate::extractor::dir::extract_dir(&session, &local_path, true) {
-              Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session)?; }
+              Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
               Err(e) => println!("\nFailed to extract git repo: {}\n", e),
             }
           }
@@ -231,8 +233,20 @@ pub fn run_app() -> Result<()> {
 }
 
 fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: &mut ChatSession) -> Result<()> {
+  // Show a spinner while the API call is in flight
+  let pb = ProgressBar::new_spinner();
+  pb.set_style(
+    ProgressStyle::with_template("{spinner} {msg}")
+      .unwrap()
+      .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+  );
+  pb.set_message("Contacting model...");
+  pb.enable_steady_tick(Duration::from_millis(80));
+
   // In JS, there's a confirmation step; skip for initial port
-  let response = client.send_message(model, &log)?;
+  let result = client.send_message(model, &log);
+  pb.finish_and_clear();
+  let response = result?;
 
   // Add to log and display
   log.add_model(response.clone());
@@ -243,13 +257,22 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   Ok(())
 }
 
-fn review_and_send(mut temp_msgs: Vec<Message>, client: &mut Client, model: &str, log: &mut MessageLog, session: &mut ChatSession) -> Result<()> {
-  // Optional directive to prepend
-  if Confirm::new("Add a directive?").with_default(false).prompt()? {
-    let directive = Text::new("Enter a directive:").prompt()?;
-    session.append_message_to_file("\n\n***\n\n### User:\n")?;
-    session.append_message_to_file(&directive)?;
-    temp_msgs.push(Message { role: Role::User, kind: MsgType::Text, content: directive });
+fn review_and_send(
+  mut temp_msgs: Vec<Message>,
+  client: &mut Client,
+  model: &str,
+  log: &mut MessageLog,
+  session: &mut ChatSession,
+  allow_directive: bool,
+) -> Result<()> {
+  // Optional directive to prepend (disabled for direct chat input)
+  if allow_directive {
+    if Confirm::new("Add a directive?").with_default(false).prompt()? {
+      let directive = Text::new("Enter a directive:").prompt()?;
+      session.append_message_to_file("\n\n***\n\n### User:\n")?;
+      session.append_message_to_file(&directive)?;
+      temp_msgs.push(Message { role: Role::User, kind: MsgType::Text, content: directive });
+    }
   }
 
   // Token estimate for text only

@@ -35,8 +35,6 @@ impl ApiClient for OpenAIClient {
     let payload = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({
             "model": model,
-            "temperature": 0,
-            "max_tokens": 32768,
             "messages": payload
         });
 
@@ -481,8 +479,8 @@ pub struct ApiChoice {
 }
 
 pub const API_CHOICES: &[ApiChoice] = &[
-  ApiChoice { key: "1", label: "gpt-4.1", env: "OPENAI_API_KEY", model: "gpt-4.1" },
-  ApiChoice { key: "2", label: "o4-mini", env: "OPENAI_API_KEY", model: "o4-mini" },
+  ApiChoice { key: "1", label: "gpt-5", env: "OPENAI_API_KEY", model: "gpt-5" },
+  ApiChoice { key: "2", label: "gpt-4.1", env: "OPENAI_API_KEY", model: "gpt-4.1" },
   ApiChoice { key: "3", label: "gemini-1.5-pro-latest", env: "GOOGLE_AI_API_KEY", model: "gemini-1.5-pro-latest" },
   ApiChoice { key: "4", label: "claude-3-5-sonnet-20240620", env: "ANTHROPIC_API_KEY", model: "claude-3-5-sonnet-20240620" },
   ApiChoice { key: "5", label: "llama-3.1-sonar-large-128k-chat", env: "PERPLEXITY_API_KEY", model: "llama-3.1-sonar-large-128k-chat" },
