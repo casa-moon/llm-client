@@ -9,7 +9,7 @@
 - Message transformation templates modeled after the JS version
 - Review-and-send step: optional directive, token/cost estimates, preview, confirm
 
-## Not Yet Ported / Known gaps
+## Known gaps
 - PDF JPXDecode (JPEG2000) embedded as data URLs (no raster conversion)
 - Terminal markdown rendering is plain (no ANSI formatting)
 - Some edge color spaces/predictors in PDFs may be skipped
