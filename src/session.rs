@@ -20,7 +20,7 @@ impl ChatSession {
     } else {
       home_dir().ok_or_else(|| anyhow::anyhow!("No home directory found"))?
     };
-    let chatgpt_dir = if is_termux { "chatgpt-client" } else { ".chatgpt-client" };
+    let chatgpt_dir = if is_termux { "llm-client" } else { ".llm-client" };
 
     let files_dir = home.join(chatgpt_dir).join("files");
     let temp_dir = home.join(chatgpt_dir).join("temp");

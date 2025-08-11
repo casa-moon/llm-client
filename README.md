@@ -29,7 +29,7 @@ The user interacts through an interactive prompt, picks a model and a command, r
 1. **Startup & Environment**
    - `.env` or environment variables provide API keys.
    - Optional request timeout via `REQUEST_TIMEOUT_SECS` (default 60).
-   - Session directories are created under `~/.chatgpt-client/` (or Termux location).
+   - Session directories are created under `~/.llm-client/` (or Termux location).
 
 2. **Interactive Loop (`src/ui.rs`)**
    - Presents a menu: choose LLM provider (`API_CHOICES`), command type (chat, file, web, etc).

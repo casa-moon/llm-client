@@ -1,6 +1,6 @@
 .idea
 target
 .DS_Store
-.chatgpt-client
+.llm-client
 
 .env
