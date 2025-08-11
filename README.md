@@ -1,7 +1,5 @@
 # Rust llm-client
 
----
-
 ## **Project Overview**
 
 This is a **Rust port of an AI chat client CLI**, originally in JavaScript. It interacts with multiple LLM (large language model) APIs (OpenAI, Google Gemini, Anthropic Claude, Perplexity, Mistral, and Ollama) and supports uploading, analyzing, and extracting text from various sources (files, directories, web pages, images, PDFs, xlsx, git repos, etc).
