@@ -241,8 +241,10 @@ impl ApiClient for OllamaClient {
             "stream": false
         });
     let http = crate::http::http_client()?;
+    let base = std::env::var("OLLAMA_API_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let ollama_api_url = format!("{}/v1/chat/completions", base.trim_end_matches('/'));
     let resp = http
-      .post("http://localhost:11434/api/chat")
+      .post(&ollama_api_url)
       .json(&body)
       .send()?;
     if !resp.status().is_success() {
@@ -251,8 +253,10 @@ impl ApiClient for OllamaClient {
       return Err(anyhow!("Ollama API error: {} - {}", status, txt));
     }
     let raw: Value = resp.json()?;
+    // OpenAI-compatible response shape: { choices: [{ message: { content } }] }
     let text = raw
-      .get("message")
+      .get("choices").and_then(|c| c.get(0))
+      .and_then(|c| c.get("message"))
       .and_then(|m| m.get("content"))
       .and_then(|s| s.as_str())
       .unwrap_or_default()
@@ -291,23 +295,25 @@ fn build_ollama_messages(log: &MessageLog) -> Result<Vec<serde_json::Value>> {
 }
 
 pub fn list_ollama_models() -> Result<Vec<String>> {
+  // OpenAI-compatible route only: GET {base}/v1/models -> { data: [{ id }] }
   #[derive(serde::Deserialize)]
-  struct Tag {
-    name: String,
-  }
+  struct OAId { id: String }
   #[derive(serde::Deserialize)]
-  struct Tags {
-    models: Vec<Tag>,
-  }
+  struct OAData { data: Vec<OAId> }
+
   let http = crate::http::http_client()?;
-  let resp = http.get("http://localhost:11434/api/tags").send()?;
+  let base = std::env::var("OLLAMA_API_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+  let url_v1 = format!("{}/v1/models", base.trim_end_matches('/'));
+
+  let resp = http.get(&url_v1).send()?;
   if !resp.status().is_success() {
     let status = resp.status();
     let txt = resp.text().unwrap_or_default();
-    return Err(anyhow!("Ollama tags error: {} - {}", status, txt));
+    return Err(anyhow!("Failed to fetch Ollama models: {} - {}", status, txt));
   }
-  let parsed: Tags = resp.json()?;
-  Ok(parsed.models.into_iter().map(|t| t.name).collect())
+  let parsed: OAData = resp.json()?;
+  let models: Vec<String> = parsed.data.into_iter().map(|m| m.id).collect();
+  Ok(models)
 }
 
 pub fn transform_messages(raw: &Vec<Message>, tmpl: TemplateKey) -> Result<serde_json::Value> {
