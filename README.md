@@ -1,19 +1,5 @@
 # Rust llm-client
 
-## Features
-- Interactive selection of API provider (OpenAI, Google, Anthropic, Perplexity, Mistral, Ollama)
-- Chat or multi-line input (opens your `$EDITOR` when available)
-- File/Directory/Web/Image/XLSX/Git/PDF commands
-- Optional web image scraping and PDF image extraction (JPEG + FlateDecode w/ PNG predictors; CMYK supported; basic JPXDecode)
-- Session file management under `~/.chatgpt-client` (or Termux path)
-- Message transformation templates modeled after the JS version
-- Review-and-send step: optional directive, token/cost estimates, preview, confirm
-
-## Known gaps
-- PDF JPXDecode (JPEG2000) embedded as data URLs (no raster conversion)
-- Terminal markdown rendering is plain (no ANSI formatting)
-- Some edge color spaces/predictors in PDFs may be skipped
-
 ---
 
 ## **Project Overview**
@@ -32,6 +18,11 @@ The user interacts through an interactive prompt, picks a model and a command, r
 - **Optionally saves or discards the chat log on exit**
 - **Interactive review step before sending to the LLM**
 - **Pretty terminal markdown rendering (via `termimad`)**
+
+## Known gaps
+- PDF JPXDecode (JPEG2000) embedded as data URLs (no raster conversion)
+- Terminal markdown rendering is plain (no ANSI formatting)
+- Some edge color spaces/predictors in PDFs may be skipped
 
 ## **How It Works**
 
