@@ -58,15 +58,56 @@ impl ChatSession {
       let _ = fs::remove_file(&self.chat_file_path);
       println!("\nChat transcript deleted.\n");
     } else if self.chat_file_path.exists() && save {
-      println!(
-        "\nChat transcript saved to {}\n",
-        self.chat_file_path.to_string_lossy()
-      );
+      let final_path = match self.rename_with_summary() {
+        Ok(p) => p,
+        Err(_) => self.chat_file_path.clone(),
+      };
+      println!("\nChat transcript saved to {}\n", final_path.to_string_lossy());
     }
     if self.temp_dir.exists() {
       let _ = fs::remove_dir_all(&self.temp_dir);
     }
     Ok(())
+  }
+
+  // Rename the chat file to include a short summary slug of the conversation.
+  // Returns the new path (or original if unchanged).
+  pub fn rename_with_summary(&self) -> Result<PathBuf> {
+    if !self.chat_file_path.exists() {
+      return Ok(self.chat_file_path.clone());
+    }
+    let content = std::fs::read_to_string(&self.chat_file_path).unwrap_or_default();
+    let summary = summarize_chat_for_slug(&content);
+    if summary.is_empty() {
+      return Ok(self.chat_file_path.clone());
+    }
+    let slug = to_slug(&summary);
+    if slug.is_empty() {
+      return Ok(self.chat_file_path.clone());
+    }
+    
+    let new_name = format!("{}.md", slug);
+    let mut new_path = self.chat_file_dir.join(&new_name);
+
+    if new_path.exists() {
+      let mut i = 2;
+      loop {
+        let candidate = self.chat_file_dir.join(format!("{}-{}.md", slug, i));
+        if !candidate.exists() {
+          new_path = candidate;
+          break;
+        }
+        i += 1;
+        if i > 50 { break; }
+      }
+    }
+
+    if new_path != self.chat_file_path {
+      std::fs::rename(&self.chat_file_path, &new_path)?;
+      Ok(new_path)
+    } else {
+      Ok(self.chat_file_path.clone())
+    }
   }
 
   pub fn copy_file_to_dir<P: AsRef<Path>>(&self, src: P) -> Result<PathBuf> {
@@ -100,4 +141,56 @@ impl ChatSession {
     file.write_all(&bytes)?;
     Ok(path)
   }
+}
+
+fn summarize_chat_for_slug(markdown: &str) -> String {
+  let mut in_user = false;
+  let mut collected = String::new();
+  for line in markdown.lines() {
+    if line.trim_start().starts_with("### ") {
+      in_user = line.contains("User:");
+      if !in_user && !collected.is_empty() { break; }
+      continue;
+    }
+    if in_user {
+      let t = line.trim();
+      if t.starts_with("```") { continue; }
+      if t.is_empty() { continue; }
+      if collected.len() + t.len() + 1 > 240 { break; }
+      if !collected.is_empty() { collected.push(' '); }
+      collected.push_str(t);
+      if t.ends_with('.') || t.ends_with('!') || t.ends_with('?') { break; }
+    }
+  }
+  if collected.is_empty() {
+    for line in markdown.lines() {
+      let t = line.trim();
+      if t.is_empty() { continue; }
+      if t.starts_with("### ") || t.starts_with("# ") { return t.trim_matches('#').trim().to_string(); }
+      return t.to_string();
+    }
+  }
+  collected
+}
+
+fn to_slug(s: &str) -> String {
+  let mut out = String::new();
+  let s = s.to_lowercase();
+  let mut last_dash = false;
+  let mut words = 0usize;
+  for ch in s.chars() {
+    if ch.is_ascii_alphanumeric() {
+      out.push(ch);
+      last_dash = false;
+    } else if ch.is_whitespace() || matches!(ch, '-' | '_' | '/' | ':') {
+      if !last_dash && !out.is_empty() {
+        out.push('-');
+        last_dash = true;
+        words += 1;
+        if words >= 8 { break; }
+      }
+    }
+    if out.len() >= 48 { break; }
+  }
+  out.trim_matches('-').to_string()
 }
