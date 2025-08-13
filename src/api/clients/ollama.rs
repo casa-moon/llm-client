@@ -1,10 +1,9 @@
 use anyhow::{anyhow, Result};
 
 use crate::message_log::{MessageLog, MsgType, Role};
-
-use super::super::traits::ApiClient;
-use super::super::transform::{strip_doc_tags_if_only_one_set};
-use super::super::types::{ModelResponse, TemplateKey};
+use crate::api::traits::ApiClient;
+use crate::api::transform::strip_doc_tags_if_only_one_set;
+use crate::api::types::{ModelResponse, TemplateKey};
 
 pub struct OllamaClient {}
 impl OllamaClient { pub fn new() -> Self { Self {} } }
@@ -91,4 +90,3 @@ pub fn list_ollama_models() -> Result<Vec<String>> {
   let models: Vec<String> = parsed.data.into_iter().map(|m| m.id).collect();
   Ok(models)
 }
-

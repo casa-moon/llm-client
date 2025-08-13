@@ -1,4 +1,5 @@
 use anyhow::Result;
+
 use crate::message_log::{Message, MsgType, Role};
 
 pub fn extract_image(url: &str) -> Result<Vec<Message>> {

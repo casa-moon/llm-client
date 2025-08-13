@@ -1,4 +1,3 @@
-
 use anyhow::{anyhow, Result};
 use std::io::Cursor;
 use image::{GenericImageView, ImageReader};

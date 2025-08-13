@@ -1,8 +1,7 @@
 use anyhow::Result;
 
 use crate::message_log::{Message, MsgType, Role};
-
-use super::types::TemplateKey;
+use crate::api::types::TemplateKey;
 
 pub fn transform_messages(raw: &Vec<Message>, tmpl: TemplateKey) -> Result<serde_json::Value> {
   match tmpl {
@@ -113,4 +112,3 @@ pub(crate) fn strip_doc_tags_if_only_one_set(s: &str) -> String {
     s.to_string()
   }
 }
-

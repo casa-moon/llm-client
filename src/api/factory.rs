@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
 
-use super::clients::{
+use crate::api::clients::{
   AnthropicClient, GoogleClient, MistralClient, OllamaClient, OpenAIClient, PerplexityClient,
 };
-use super::client::Client;
-use super::types::{ApiChoice, API_CHOICES};
+use crate::api::client::Client;
+use crate::api::types::{ApiChoice, API_CHOICES};
 
 pub fn create_client(choice_key: &str) -> Result<(Client, String)> {
   let cfg: &ApiChoice = API_CHOICES
@@ -26,4 +26,3 @@ pub fn create_client(choice_key: &str) -> Result<(Client, String)> {
   };
   Ok((client, cfg.model.to_string()))
 }
-

@@ -1,10 +1,9 @@
 use anyhow::Result;
 
 use crate::message_log::MessageLog;
-
-use super::clients::{AnthropicClient, GoogleClient, MistralClient, OllamaClient, OpenAIClient, PerplexityClient};
-use super::traits::ApiClient as _; // trait methods on enum dispatch
-use super::types::{ModelResponse, TemplateKey};
+use crate::api::clients::{AnthropicClient, GoogleClient, MistralClient, OllamaClient, OpenAIClient, PerplexityClient};
+use crate::api::traits::ApiClient as _; // trait methods on enum dispatch
+use crate::api::types::{ModelResponse, TemplateKey};
 
 pub enum Client {
   OpenAI(OpenAIClient),

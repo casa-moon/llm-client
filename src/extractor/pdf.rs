@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
+use base64::Engine;
+
 use crate::message_log::{Message, MsgType, Role};
 use crate::session::ChatSession;
-use base64::Engine;
 
 pub fn extract_pdf(session: &mut ChatSession, path: &std::path::Path, get_images: bool) -> Result<Vec<Message>> {
   if !path.exists() { return Err(anyhow!("File not found: {}", path.display())); }

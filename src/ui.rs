@@ -1,15 +1,15 @@
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
-
-use crate::api::{create_client, API_CHOICES, Client, ModelResponse};
-use crate::message_log::{Message, MessageLog, MsgType, Role};
 use image::{GenericImageView, ImageReader};
-use crate::session::ChatSession;
-use crate::extractor::file as file_extractor;
 use termimad; // terminal markdown rendering
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use std::time::Duration;
+
+use crate::api::{create_client, API_CHOICES, Client, ModelResponse};
+use crate::message_log::{Message, MessageLog, MsgType, Role};
+use crate::session::ChatSession;
+use crate::extractor::file as file_extractor;
 
 pub fn run_app() -> Result<()> {
   // choose API

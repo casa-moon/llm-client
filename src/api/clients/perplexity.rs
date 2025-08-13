@@ -1,10 +1,9 @@
 use anyhow::{anyhow, Result};
 
 use crate::message_log::MessageLog;
-
-use super::super::traits::ApiClient;
-use super::super::transform::transform_messages;
-use super::super::types::{ModelResponse, TemplateKey};
+use crate::api::traits::ApiClient;
+use crate::api::transform::transform_messages;
+use crate::api::types::{ModelResponse, TemplateKey};
 
 pub struct PerplexityClient {
   pub api_key: String,
@@ -47,4 +46,3 @@ impl ApiClient for PerplexityClient {
     Ok(ModelResponse { raw, text })
   }
 }
-
