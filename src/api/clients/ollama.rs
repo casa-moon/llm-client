@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use crate::message_log::{MessageLog, MsgType, Role};
 
 use super::super::traits::ApiClient;
-use super::super::transform::{strip_doc_tags_if_only_one_set, transform_messages};
+use super::super::transform::{strip_doc_tags_if_only_one_set};
 use super::super::types::{ModelResponse, TemplateKey};
 
 pub struct OllamaClient {}

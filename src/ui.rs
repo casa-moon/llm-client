@@ -274,7 +274,7 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   session.append_message_to_file(&format!("\n\n### {}:\n", model))?;
   session.append_message_to_file(&response.text)?;
   println!("\n{}:", model);
-  let mut skin = termimad::MadSkin::default();
+  let skin = termimad::MadSkin::default();
   skin.print_text(&response.text);
   println!();
   Ok(())

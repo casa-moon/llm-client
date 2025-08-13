@@ -6,8 +6,7 @@ mod session;
 mod ui;
 
 use anyhow::Result;
-use dotenvy::{dotenv, from_path};
-use std::path::Path;
+use dotenvy::{dotenv};
 
 fn main() -> Result<()> {
   // Load environment variables from .env if present
