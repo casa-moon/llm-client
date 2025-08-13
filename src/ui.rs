@@ -90,7 +90,8 @@ pub fn run_app() -> Result<()> {
         review_and_send(temp_msgs, &mut client, &model, &mut log, &mut session, true)?;
       }
       "file" => {
-        let path_str = Text::new("Enter path:").prompt()?;
+        let raw = Text::new("Enter path:").prompt()?;
+        let path_str = normalize_path_input(&raw);
         let path_abs = if path_str.starts_with("http://") || path_str.starts_with("https://") {
           session.download_to_temp(&path_str)?
         } else {
@@ -121,7 +122,8 @@ pub fn run_app() -> Result<()> {
         }
       }
       "dir" => {
-        let path_str = Text::new("Enter path:").prompt()?;
+        let raw = Text::new("Enter path:").prompt()?;
+        let path_str = normalize_path_input(&raw);
         let path = std::path::Path::new(&path_str);
         let path_abs = match std::fs::canonicalize(path) {
           Ok(p) => p,
@@ -170,7 +172,8 @@ pub fn run_app() -> Result<()> {
         review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
       }
       "pdf" => {
-        let path_str = Text::new("Enter path:").prompt()?;
+        let raw = Text::new("Enter path:").prompt()?;
+        let path_str = normalize_path_input(&raw);
         let mut path_abs = if path_str.starts_with("http://") || path_str.starts_with("https://") {
           session.download_to_temp(&path_str)?
         } else { std::fs::canonicalize(&path_str).unwrap_or_else(|_| std::path::PathBuf::from(&path_str)) };
@@ -193,7 +196,8 @@ pub fn run_app() -> Result<()> {
         }
       }
       "xlsx" => {
-        let path_str = Text::new("Enter path:").prompt()?;
+        let raw = Text::new("Enter path:").prompt()?;
+        let path_str = normalize_path_input(&raw);
         let path_abs = if path_str.starts_with("http://") || path_str.starts_with("https://") {
           session.download_to_temp(&path_str)?
         } else { std::fs::canonicalize(&path_str).unwrap_or_else(|_| std::path::PathBuf::from(&path_str)) };
@@ -399,4 +403,13 @@ fn count_image_tokens(width: usize, height: usize) -> usize {
   let w = (width + 511) / 512;
   let n = w * h;
   85 + 170 * n
+}
+
+fn normalize_path_input(s: &str) -> String {
+  let t = s.trim();
+  // Remove leading/trailing single or double quotes repeatedly
+  let mut out = t.trim_matches(|c| c == '"' || c == '\'').to_string();
+  // In case users double-quote twice, strip again
+  out = out.trim_matches(|c| c == '"' || c == '\'').to_string();
+  out
 }
