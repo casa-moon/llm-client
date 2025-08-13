@@ -65,6 +65,33 @@ pub fn run_app() -> Result<()> {
     let command = commands.iter().find(|(n, _)| n == &choice).unwrap().1;
     match command {
       "save" => {
+        // Try to summarize the chat via the active API for a filename slug
+        let mut sum_log = crate::message_log::MessageLog::new();
+        sum_log.extend(log.raw().clone());
+        sum_log.add_user("Summarize this entire conversation in <= 256 characters. Plain text only. No quotes. No markdown. One sentence.");
+        // Show a spinner while generating the summary + renaming
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+          ProgressStyle::with_template("{spinner} {msg}")
+            .unwrap()
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+        );
+        pb.set_message("Generating summary and renaming file...");
+        pb.enable_steady_tick(Duration::from_millis(80));
+
+        let rename_result = (|| -> anyhow::Result<()> {
+          let resp = client.send_message(&model, &sum_log)?;
+          let mut s = resp.text.trim().to_string();
+          // Keep it within 256 chars on char boundaries
+          if s.chars().count() > 256 { s = s.chars().take(256).collect(); }
+          session.rename_with_summary(Some(&s))?;
+          Ok(())
+        })();
+        pb.finish_and_clear();
+        if let Err(e) = rename_result {
+          println!("Could not summarize for filename: {}", e);
+          let _ = session.rename_with_summary(None);
+        }
         session.clean_up(true)?;
         break;
       }

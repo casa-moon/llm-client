@@ -58,11 +58,7 @@ impl ChatSession {
       let _ = fs::remove_file(&self.chat_file_path);
       println!("\nChat transcript deleted.\n");
     } else if self.chat_file_path.exists() && save {
-      let final_path = match self.rename_with_summary() {
-        Ok(p) => p,
-        Err(_) => self.chat_file_path.clone(),
-      };
-      println!("\nChat transcript saved to {}\n", final_path.to_string_lossy());
+      println!("\nChat transcript saved to {}\n", self.chat_file_path.to_string_lossy());
     }
     if self.temp_dir.exists() {
       let _ = fs::remove_dir_all(&self.temp_dir);
@@ -71,21 +67,23 @@ impl ChatSession {
   }
 
   // Rename the chat file to include a short summary slug of the conversation.
+  // If `summary_opt` is None, it derives a summary from the file contents.
   // Returns the new path (or original if unchanged).
-  pub fn rename_with_summary(&self) -> Result<PathBuf> {
-    if !self.chat_file_path.exists() {
-      return Ok(self.chat_file_path.clone());
-    }
-    let content = std::fs::read_to_string(&self.chat_file_path).unwrap_or_default();
-    let summary = summarize_chat_for_slug(&content);
-    if summary.is_empty() {
-      return Ok(self.chat_file_path.clone());
-    }
-    let slug = to_slug(&summary);
-    if slug.is_empty() {
-      return Ok(self.chat_file_path.clone());
-    }
-    
+  pub fn rename_with_summary(&mut self, summary_opt: Option<&str>) -> Result<PathBuf> {
+    if !self.chat_file_path.exists() { return Ok(self.chat_file_path.clone()); }
+
+    let owned;
+    let summary: &str = match summary_opt {
+      Some(s) if !s.trim().is_empty() => s,
+      _ => {
+        owned = summarize_chat_for_slug(&std::fs::read_to_string(&self.chat_file_path).unwrap_or_default());
+        if owned.is_empty() { return Ok(self.chat_file_path.clone()); }
+        &owned
+      }
+    };
+
+    let slug = to_slug(summary);
+    if slug.is_empty() { return Ok(self.chat_file_path.clone()); }
     let new_name = format!("{}.md", slug);
     let mut new_path = self.chat_file_dir.join(&new_name);
 
@@ -102,12 +100,8 @@ impl ChatSession {
       }
     }
 
-    if new_path != self.chat_file_path {
-      std::fs::rename(&self.chat_file_path, &new_path)?;
-      Ok(new_path)
-    } else {
-      Ok(self.chat_file_path.clone())
-    }
+    if new_path != self.chat_file_path { std::fs::rename(&self.chat_file_path, &new_path)?; self.chat_file_path = new_path.clone(); }
+    Ok(self.chat_file_path.clone())
   }
 
   pub fn copy_file_to_dir<P: AsRef<Path>>(&self, src: P) -> Result<PathBuf> {
