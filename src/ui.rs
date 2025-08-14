@@ -68,7 +68,7 @@ pub fn run_app() -> Result<()> {
         // Try to summarize the chat via the active API for a filename slug
         let mut sum_log = crate::message_log::MessageLog::new();
         sum_log.extend(log.raw().clone());
-        sum_log.add_user("Summarize this entire conversation in <= 256 characters. Plain text only. No quotes. No markdown. One sentence.");
+        sum_log.add_user("Summarize this entire conversation in <= 256 characters to create a filename that encapsulates the essence of the content. Plain text only. No quotes. No markdown. One sentence.");
         // Show a spinner while generating the summary + renaming
         let pb = ProgressBar::new_spinner();
         pb.set_style(
