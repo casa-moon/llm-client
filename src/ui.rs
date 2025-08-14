@@ -74,13 +74,12 @@ pub fn run_app() -> Result<()> {
           let mut s = resp.text.trim().to_string();
           // Keep it within 256 chars on char boundaries
           if s.chars().count() > 256 { s = s.chars().take(256).collect(); }
-          session.rename_with_summary(Some(&s))?;
+          session.rename_with_summary(&s)?;
           Ok(())
         })();
         crate::spinner::stop(&pb);
         if let Err(e) = rename_result {
           println!("Could not summarize for filename: {}", e);
-          let _ = session.rename_with_summary(None);
         }
         session.clean_up(true)?;
         break;

@@ -67,20 +67,11 @@ impl ChatSession {
   }
 
   // Rename the chat file to include a short summary slug of the conversation.
-  // If `summary_opt` is None, it derives a summary from the file contents.
   // Returns the new path (or original if unchanged).
-  pub fn rename_with_summary(&mut self, summary_opt: Option<&str>) -> Result<PathBuf> {
+  pub fn rename_with_summary(&mut self, summary: &str) -> Result<PathBuf> {
     if !self.chat_file_path.exists() { return Ok(self.chat_file_path.clone()); }
-
-    let owned;
-    let summary: &str = match summary_opt {
-      Some(s) if !s.trim().is_empty() => s,
-      _ => {
-        owned = summarize_chat_for_slug(&std::fs::read_to_string(&self.chat_file_path).unwrap_or_default());
-        if owned.is_empty() { return Ok(self.chat_file_path.clone()); }
-        &owned
-      }
-    };
+    let summary = summary.trim();
+    if summary.is_empty() { return Ok(self.chat_file_path.clone()); }
 
     let slug = to_slug(summary);
     if slug.is_empty() { return Ok(self.chat_file_path.clone()); }
@@ -135,36 +126,6 @@ impl ChatSession {
     file.write_all(&bytes)?;
     Ok(path)
   }
-}
-
-fn summarize_chat_for_slug(markdown: &str) -> String {
-  let mut in_user = false;
-  let mut collected = String::new();
-  for line in markdown.lines() {
-    if line.trim_start().starts_with("### ") {
-      in_user = line.contains("User:");
-      if !in_user && !collected.is_empty() { break; }
-      continue;
-    }
-    if in_user {
-      let t = line.trim();
-      if t.starts_with("```") { continue; }
-      if t.is_empty() { continue; }
-      if collected.len() + t.len() + 1 > 240 { break; }
-      if !collected.is_empty() { collected.push(' '); }
-      collected.push_str(t);
-      if t.ends_with('.') || t.ends_with('!') || t.ends_with('?') { break; }
-    }
-  }
-  if collected.is_empty() {
-    for line in markdown.lines() {
-      let t = line.trim();
-      if t.is_empty() { continue; }
-      if t.starts_with("### ") || t.starts_with("# ") { return t.trim_matches('#').trim().to_string(); }
-      return t.to_string();
-    }
-  }
-  collected
 }
 
 fn to_slug(s: &str) -> String {
