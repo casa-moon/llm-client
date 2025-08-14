@@ -68,7 +68,7 @@ pub fn run_app() -> Result<()> {
         sum_log.extend(log.raw().clone());
         sum_log.add_user("Summarize this entire conversation in <= 256 characters to create a filename that encapsulates the essence of the content. Plain text only. No quotes. No markdown. One sentence.");
         // Show a spinner while generating the summary + renaming
-        let pb = crate::spinner::start("Generating summary and renaming file...");
+        let pb = crate::spinner::start("Renaming file...");
           let rename_result = (|| -> anyhow::Result<()> {
           let resp = client.send_message(&model, &sum_log)?;
           let mut s = resp.text.trim().to_string();
@@ -255,7 +255,6 @@ pub fn run_app() -> Result<()> {
 fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: &mut ChatSession) -> Result<()> {
   // Show a spinner while the API call is in flight
   let pb = crate::spinner::start("Waiting for response...");
-// In JS, there's a confirmation step; skip for initial port
   let result = client.send_message(model, &log);
   crate::spinner::stop(&pb);
   let response: ModelResponse = match result {

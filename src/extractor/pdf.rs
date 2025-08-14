@@ -6,13 +6,19 @@ use crate::session::ChatSession;
 
 pub fn extract_pdf(session: &mut ChatSession, path: &std::path::Path, get_images: bool) -> Result<Vec<Message>> {
   if !path.exists() { return Err(anyhow!("File not found: {}", path.display())); }
+
+  let pb = crate::spinner::start("Extracting PDF text...");
   let text = pdf_extract::extract_text(path).map_err(|e| anyhow!("Failed to extract text from PDF: {}", e))?;
+  crate::spinner::stop(&pb);
+  
   let mut out = Vec::new();
   out.push(Message { role: Role::User, kind: MsgType::Text, content: text });
   if get_images {
     // Try extracting embedded images (DCTDecode only)
+    let pb = crate::spinner::start("Extracting PDF images...");
     match extract_pdf_images_dct(session, path) {
       Ok(mut imgs) => {
+        crate::spinner::stop(&pb);
         for (label, data_url, tokens) in imgs.drain(..) {
           out.push(Message { role: Role::User, kind: MsgType::Text, content: label });
           out.push(Message { role: Role::User, kind: MsgType::Image, content: data_url });
@@ -20,6 +26,7 @@ pub fn extract_pdf(session: &mut ChatSession, path: &std::path::Path, get_images
         }
       }
       Err(e) => {
+        crate::spinner::stop(&pb);
         out.push(Message { role: Role::User, kind: MsgType::Text, content: format!("[Failed to extract PDF images: {}]", e) });
       }
     }
