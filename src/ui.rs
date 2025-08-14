@@ -2,9 +2,7 @@ use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use image::{GenericImageView, ImageReader};
 use termimad; // terminal markdown rendering
-use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
-use std::time::Duration;
 
 use crate::api::{create_client, API_CHOICES, Client, ModelResponse};
 use crate::message_log::{Message, MessageLog, MsgType, Role};
@@ -70,16 +68,8 @@ pub fn run_app() -> Result<()> {
         sum_log.extend(log.raw().clone());
         sum_log.add_user("Summarize this entire conversation in <= 256 characters to create a filename that encapsulates the essence of the content. Plain text only. No quotes. No markdown. One sentence.");
         // Show a spinner while generating the summary + renaming
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-          ProgressStyle::with_template("{spinner} {msg}")
-            .unwrap()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
-        );
-        pb.set_message("Generating summary and renaming file...");
-        pb.enable_steady_tick(Duration::from_millis(80));
-
-        let rename_result = (|| -> anyhow::Result<()> {
+        let pb = crate::spinner::start("Generating summary and renaming file...");
+          let rename_result = (|| -> anyhow::Result<()> {
           let resp = client.send_message(&model, &sum_log)?;
           let mut s = resp.text.trim().to_string();
           // Keep it within 256 chars on char boundaries
@@ -87,7 +77,7 @@ pub fn run_app() -> Result<()> {
           session.rename_with_summary(Some(&s))?;
           Ok(())
         })();
-        pb.finish_and_clear();
+        crate::spinner::stop(&pb);
         if let Err(e) = rename_result {
           println!("Could not summarize for filename: {}", e);
           let _ = session.rename_with_summary(None);
@@ -265,18 +255,10 @@ pub fn run_app() -> Result<()> {
 
 fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: &mut ChatSession) -> Result<()> {
   // Show a spinner while the API call is in flight
-  let pb = ProgressBar::new_spinner();
-  pb.set_style(
-    ProgressStyle::with_template("{spinner} {msg}")
-      .unwrap()
-      .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
-  );
-  pb.set_message("Waiting for response...");
-  pb.enable_steady_tick(Duration::from_millis(80));
-
-  // In JS, there's a confirmation step; skip for initial port
+  let pb = crate::spinner::start("Waiting for response...");
+// In JS, there's a confirmation step; skip for initial port
   let result = client.send_message(model, &log);
-  pb.finish_and_clear();
+  crate::spinner::stop(&pb);
   let response: ModelResponse = match result {
     Ok(r) => r,
     Err(e) => {

@@ -4,6 +4,7 @@ mod extractor;
 mod message_log;
 mod session;
 mod ui;
+mod spinner;
 
 use anyhow::Result;
 use dotenvy::{dotenv};

@@ -2,8 +2,6 @@ use anyhow::{anyhow, Result};
 use std::io::Cursor;
 use image::{GenericImageView, ImageReader};
 use scraper::{Html, Selector};
-use indicatif::{ProgressBar, ProgressStyle};
-use std::time::Duration;
 use std::collections::{HashSet, VecDeque};
 use url::Url;
 
@@ -109,16 +107,7 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
     let mut fetched = 0usize;
     let total = imgs.len();
     let spinner = if total > 0 {
-      let s = ProgressBar::new_spinner();
-      s.set_style(
-        ProgressStyle::with_template("{spinner} {msg}")
-          .unwrap()
-          .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
-      );
-       
-      
-      s.enable_steady_tick(Duration::from_millis(80));
-      s.set_message(format!("Fetching {} images from {}", total, url));
+      let s = crate::spinner::start(format!("Fetching {} images from {}", total, url));
       Some(s)
     } else { None };
 
