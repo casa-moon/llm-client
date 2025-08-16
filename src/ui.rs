@@ -71,7 +71,8 @@ pub fn run_app() -> Result<()> {
         let pb = crate::spinner::start("Renaming file...");
           let rename_result = (|| -> anyhow::Result<()> {
           let resp = client.send_message(&model, &sum_log)?;
-          let mut s = resp.text.trim().to_string();
+          // Ignore any model "thinking" content wrapped in <think>...</think>
+          let mut s = strip_think_sections(&resp.text).trim().to_string();
           // Keep it within 256 chars on char boundaries
           if s.chars().count() > 256 { s = s.chars().take(256).collect(); }
           session.rename_with_summary(&s)?;
@@ -250,6 +251,38 @@ pub fn run_app() -> Result<()> {
   }
 
   Ok(())
+}
+
+// Remove any segments enclosed in <think>...</think> from the summary text.
+fn strip_think_sections(input: &str) -> String {
+  let mut out = String::with_capacity(input.len());
+  let mut i = 0usize;
+  let bytes = input.as_bytes();
+  while i < input.len() {
+    if let Some(start_rel) = input[i..].find("<think>") {
+      let start = i + start_rel;
+      // push text before the <think>
+      out.push_str(&input[i..start]);
+      let after_start = start + "<think>".len();
+      if let Some(end_rel) = input[after_start..].find("</think>") {
+        let end = after_start + end_rel + "</think>".len();
+        // skip the think block entirely
+        i = end;
+        continue;
+      } else {
+        // No closing tag; drop the rest from the start tag
+        break;
+      }
+    } else {
+      // No more think tags; append remainder
+      out.push_str(&input[i..]);
+      break;
+    }
+  }
+  // Ensure valid UTF-8 is preserved (we only sliced on char boundaries via &str)
+  // But guard against accidental non-UTF indexing if this ever changes
+  let _ = bytes; // silence unused warning if optimizations change
+  out
 }
 
 fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: &mut ChatSession) -> Result<()> {
