@@ -53,7 +53,7 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
             // add file path then its contents
             out.push(Message { role: Role::User, kind: MsgType::Text, content: p.display().to_string() });
             out.extend(msgs);
-            let _ = session.append_message_to_file(&format!("\n- {}\n", p.display()));
+            let _ = session.append_message_to_file(&format!("- {}", p.display()));
           }
           Err(_) => continue,
         }
