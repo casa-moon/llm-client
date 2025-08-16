@@ -87,9 +87,8 @@ pub fn transform_messages(raw: &Vec<Message>, tmpl: TemplateKey) -> Result<serde
           })),
         }
       }
-      if matches!(tmpl, TemplateKey::Google) {
-        out.push(serde_json::json!({"role": "model", "parts": [{"text": "continue"}]}));
-      }
+      // For Google Gemini, ensure the last message remains a user turn.
+      // Do not append synthetic "model: continue" which can confuse turn-taking.
       Ok(serde_json::Value::Array(out))
     }
   }

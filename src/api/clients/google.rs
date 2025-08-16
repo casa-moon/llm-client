@@ -39,19 +39,31 @@ impl ApiClient for GoogleClient {
       return Err(anyhow!("Google API error: {} - {}", status, txt));
     }
     let raw: serde_json::Value = resp.json()?;
-    let text = raw
-      .get("candidates")
-      .and_then(|c| c.get(0))
-      .and_then(|cand| cand.get("content"))
-      .and_then(|content| content.get("parts"))
-      .and_then(|parts| parts.as_array().cloned())
-      .map(|arr| arr
-        .into_iter()
-        .filter_map(|p| p.get("text").and_then(|t| t.as_str()).map(|s| s.to_string()))
-        .collect::<Vec<_>>()
-        .join("\n")
-      )
-      .unwrap_or_default();
+    // Robustly collect all text parts from the first candidate (or all, if desired)
+    let mut texts: Vec<String> = Vec::new();
+    if let Some(cands) = raw.get("candidates").and_then(|c| c.as_array()) {
+      for cand in cands.iter().take(1) {
+        // Typical shape: candidates[0].content.parts[*].text
+        if let Some(parts) = cand
+          .get("content")
+          .and_then(|content| content.get("parts"))
+          .and_then(|parts| parts.as_array())
+        {
+          for p in parts {
+            if let Some(s) = p.get("text").and_then(|t| t.as_str()) {
+              texts.push(s.to_string());
+            }
+          }
+        }
+      }
+    }
+    // Fallback: sometimes providers may inline a top-level text field (defensive)
+    if texts.is_empty() {
+      if let Some(s) = raw.get("text").and_then(|t| t.as_str()) {
+        texts.push(s.to_string());
+      }
+    }
+    let text = texts.join("\n");
     Ok(ModelResponse { raw, text })
   }
 }
