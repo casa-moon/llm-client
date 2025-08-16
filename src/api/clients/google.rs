@@ -22,12 +22,17 @@ impl ApiClient for GoogleClient {
       "generationConfig": { "maxOutputTokens": 2048 },
     });
 
+    // Use v1beta endpoint and x-goog-api-key header per latest format
     let url = format!(
-      "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
-      model, self.api_key
+      "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+      model
     );
     let http = crate::http::http_client()?;
-    let resp = http.post(&url).json(&body).send()?;
+    let resp = http
+      .post(&url)
+      .header("x-goog-api-key", &self.api_key)
+      .json(&body)
+      .send()?;
     if !resp.status().is_success() {
       let status = resp.status();
       let txt = resp.text().unwrap_or_default();
