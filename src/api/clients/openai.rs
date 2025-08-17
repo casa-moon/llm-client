@@ -38,7 +38,6 @@ impl OpenAIClient {
     fps: Option<u32>,
     resolution: Option<&str>,
   ) -> Result<Vec<u8>> {
-    use base64::Engine as _;
     use reqwest::header::AUTHORIZATION;
     use reqwest::blocking::multipart;
     let http = crate::http::http_client()?;
@@ -139,13 +138,7 @@ impl ApiClient for OpenAIClient {
     }
 
     let raw: serde_json::Value = resp.json()?;
-    let text = raw
-      .get("choices").and_then(|c| c.get(0))
-      .and_then(|c| c.get("message"))
-      .and_then(|m| m.get("content"))
-      .and_then(|s| s.as_str())
-      .unwrap_or_default()
-      .to_string();
+    let text = self.extract_text(&raw);
     Ok(ModelResponse { raw, text })
   }
 }

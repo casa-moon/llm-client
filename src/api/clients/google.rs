@@ -38,11 +38,15 @@ impl ApiClient for GoogleClient {
       return Err(anyhow!("Google API error: {} - {}", status, txt));
     }
     let raw: serde_json::Value = resp.json()?;
-    // Robustly collect all text parts from the first candidate (or all, if desired)
+    let text = self.extract_text(&raw);
+    Ok(ModelResponse { raw, text })
+  }
+
+  // Override extractor for Google response format
+  fn extract_text(&self, raw: &serde_json::Value) -> String {
     let mut texts: Vec<String> = Vec::new();
     if let Some(cands) = raw.get("candidates").and_then(|c| c.as_array()) {
       for cand in cands.iter().take(1) {
-        // Typical shape: candidates[0].content.parts[*].text
         if let Some(parts) = cand
           .get("content")
           .and_then(|content| content.get("parts"))
@@ -56,13 +60,11 @@ impl ApiClient for GoogleClient {
         }
       }
     }
-    // Fallback: sometimes providers may inline a top-level text field (defensive)
     if texts.is_empty() {
       if let Some(s) = raw.get("text").and_then(|t| t.as_str()) {
         texts.push(s.to_string());
       }
     }
-    let text = texts.join("\n");
-    Ok(ModelResponse { raw, text })
+    texts.join("\n")
   }
 }

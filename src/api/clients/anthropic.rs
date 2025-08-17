@@ -34,12 +34,17 @@ impl ApiClient for AnthropicClient {
       return Err(anyhow!("Anthropic API error: {} - {}", status, txt));
     }
     let raw: serde_json::Value = resp.json()?;
-    let text = raw
+    let text = self.extract_text(&raw);
+    Ok(ModelResponse { raw, text })
+  }
+
+  // Override extractor for Anthropic response format
+  fn extract_text(&self, raw: &serde_json::Value) -> String {
+    raw
       .get("content").and_then(|c| c.get(0))
       .and_then(|p| p.get("text"))
       .and_then(|s| s.as_str())
       .unwrap_or_default()
-      .to_string();
-    Ok(ModelResponse { raw, text })
+      .to_string()
   }
 }
