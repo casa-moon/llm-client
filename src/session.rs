@@ -10,6 +10,7 @@ pub struct ChatSession {
   pub chat_file_dir: PathBuf,
   chat_file_path: PathBuf,
   pub image_token_count: usize,
+  pub videos_dir: PathBuf,
 }
 
 impl ChatSession {
@@ -25,10 +26,12 @@ impl ChatSession {
     let files_dir = home.join(chatgpt_dir).join("files");
     let temp_dir = home.join(chatgpt_dir).join("temp");
     let chat_file_dir = home.join(chatgpt_dir).join("chats");
+    let videos_dir = home.join(chatgpt_dir).join("videos");
 
     fs::create_dir_all(&files_dir)?;
     fs::create_dir_all(&temp_dir)?;
     fs::create_dir_all(&chat_file_dir)?;
+    fs::create_dir_all(&videos_dir)?;
 
     let timestamp = Utc::now().to_rfc3339().replace(":", "-");
     let chat_file_name = format!("message-log-{}.md", timestamp);
@@ -40,6 +43,7 @@ impl ChatSession {
       chat_file_dir,
       chat_file_path,
       image_token_count: 0,
+      videos_dir,
     })
   }
 
@@ -126,6 +130,24 @@ impl ChatSession {
     file.write_all(&bytes)?;
     Ok(path)
   }
+
+  pub fn save_video_bytes(&self, name_hint: &str, ext: &str, bytes: &[u8]) -> Result<PathBuf> {
+    use std::io::Write;
+    let slug = to_slug_like(name_hint);
+    let timestamp = Utc::now().to_rfc3339().replace(":", "-");
+    let base = if slug.is_empty() { format!("video-{}", timestamp) } else { format!("{}-{}", slug, timestamp) };
+    let mut path = self.videos_dir.join(format!("{}.{}", base, ext));
+    // Ensure uniqueness if somehow collides
+    let mut i = 2;
+    while path.exists() {
+      path = self.videos_dir.join(format!("{}-{}.{}", base, i, ext));
+      i += 1;
+      if i > 50 { break; }
+    }
+    let mut f = fs::File::create(&path)?;
+    f.write_all(bytes)?;
+    Ok(path)
+  }
 }
 
 fn to_slug(s: &str) -> String {
@@ -148,4 +170,9 @@ fn to_slug(s: &str) -> String {
     if out.len() >= 48 { break; }
   }
   out.trim_matches('-').to_string()
+}
+
+fn to_slug_like(s: &str) -> String {
+  // Similar to to_slug but more permissive for short prompts
+  to_slug(s)
 }

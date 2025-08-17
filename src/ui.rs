@@ -47,6 +47,7 @@ pub fn run_app() -> Result<()> {
     ("Directory", "dir"),
     ("Web Page", "web"),
     ("Image", "image"),
+    ("Video (Sora)", "sora_video"),
     ("PDF", "pdf"),
     ("Excel (xlsx)", "xlsx"),
     ("Git Repository", "git"),
@@ -187,6 +188,49 @@ pub fn run_app() -> Result<()> {
         if let Err(e) = estimate_image_tokens(&url, &mut session) { println!("Warning: could not estimate image tokens: {}", e); }
         let msgs = crate::extractor::image::extract_image(&url)?;
         review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
+      }
+      "sora_video" => {
+        let prompt_text = Text::new("Enter video prompt:").prompt()?;
+        let dur_input = Text::new("Duration (seconds)")
+          .with_placeholder("5")
+          .prompt()?;
+        let duration: u32 = dur_input.trim().parse().unwrap_or(5);
+        let fps_input = Text::new("FPS (frames per second)")
+          .with_placeholder("24")
+          .prompt()?;
+        let fps: u32 = fps_input.trim().parse().unwrap_or(24);
+        let size_options = vec![
+          "1280x720",
+          "720x1280",
+          "896x512",
+          "512x896",
+          "640x352",
+          "352x640",
+        ];
+        let res_input = Select::new("Size (resolution)", size_options.clone()).with_starting_cursor(0).prompt()?;
+        // Show spinner while generating video
+        let pb = crate::spinner::start("Generating Sora video...");
+        let result: anyhow::Result<std::path::PathBuf> = (|| {
+          let key = std::env::var("OPENAI_API_KEY")
+            .map_err(|_| anyhow::anyhow!("Missing OPENAI_API_KEY in environment"))?;
+          let openai = crate::api::clients::openai::OpenAIClient::new(key);
+          let bytes = openai.generate_sora_video(&prompt_text, Some(duration), Some(fps), Some(res_input.trim()))?;
+          let path = session.save_video_bytes(&prompt_text, "mp4", &bytes)?;
+          Ok(path)
+        })();
+        crate::spinner::stop(&pb);
+        match result {
+          Ok(path) => {
+            println!("\nSaved video to {}\n", path.to_string_lossy());
+            session.append_message_to_file("\n\n***\n\n### User (Sora prompt):\n")?;
+            session.append_message_to_file(&prompt_text)?;
+            session.append_message_to_file("\n\n### Sora Video:\n")?;
+            session.append_message_to_file(&format!("Saved to {}", path.to_string_lossy()))?;
+          }
+          Err(e) => {
+            println!("\nFailed to generate Sora video: {}\n", e);
+          }
+        }
       }
       "pdf" => {
         let raw = Text::new("Enter path:").prompt()?;

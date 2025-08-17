@@ -11,6 +11,7 @@ The user interacts through an interactive prompt, picks a model and a command, r
 - **Choose Language Model/API provider** (OpenAI, Google Gemini, Claude, etc)
 - **Send chat or multi-line messages**
 - **Attach/extract information from files, directories, URLs, images, PDFs, Excel workbooks, Git repos**
+- **Generate videos with OpenAI Sora and save to a videos folder**
 - **Handles image and PDF extraction including embedded images, with token/cost estimation**
 - **Maintains a session log (`message-log-...md`) per session**
 - **Optionally saves or discards the chat log on exit**
@@ -32,6 +33,7 @@ The user interacts through an interactive prompt, picks a model and a command, r
 2. **Interactive Loop (`src/ui.rs`)**
    - Presents a menu: choose LLM provider (`API_CHOICES`), command type (chat, file, web, etc).
    - Processes user input appropriately (chat, read from file, scrape web, etc).
+   - Generate videos using the "Video (Sora)" command; MP4s are saved under `~/.llm-client/videos/` (or Termux location).
    - Extracts messages using `extractor` modules (web, pdf, xlsx, etc).
    - Runs a "review-and-send" step: token/cost preview, confirm to send, show data.
    - Extends the log with message(s), sends to the provider API, displays output, saves to session log.
@@ -80,3 +82,12 @@ The user interacts through an interactive prompt, picks a model and a command, r
 5. You confirm to send (or cancel).
 6. The data is sent to the API, and a markdown-formatted reply is shown.
 7. This loop continues; on exit, you can keep or delete the session log.
+### Sora configuration
+
+- Set `OPENAI_API_KEY` for authentication.
+- Optional: set `OPENAI_SORA_MODEL` (default `sora`).
+- Optional: set `OPENAI_SORA_ENDPOINT` to override the API path if your account uses a different endpoint. By default the client tries:
+  - `https://api.openai.com/v1/videos`
+  - `https://api.openai.com/v1/video_generations`
+  - `https://api.openai.com/v1/video/generations`
+- The UI prompts for duration and FPS to compute `n_frames`, and for a valid `size` (resolution). The video saves to the session videos folder.
