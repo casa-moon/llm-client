@@ -38,14 +38,8 @@ impl MessageLog {
     self.raw.push(Message { role: Role::Model, kind: MsgType::Text, content: content.into() });
   }
 
-  pub fn add_image(&mut self, content: impl Into<String>) {
-    self.raw.push(Message { role: Role::User, kind: MsgType::Image, content: content.into() });
-  }
-
   pub fn extend(&mut self, mut msgs: Vec<Message>) { self.raw.append(&mut msgs); }
 
   pub fn raw(&self) -> &Vec<Message> { &self.raw }
-
-  pub fn clear(&mut self) { self.raw.clear(); }
 }
 

@@ -13,7 +13,6 @@ pub struct GoogleClient {
 impl GoogleClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
 
 impl ApiClient for GoogleClient {
-  fn name(&self) -> &'static str { "google" }
   fn template(&self) -> TemplateKey { TemplateKey::Google }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     let contents = transform_messages(log.raw(), self.template())?;

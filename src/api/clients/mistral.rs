@@ -12,7 +12,6 @@ pub struct MistralClient {
 impl MistralClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
 
 impl ApiClient for MistralClient {
-  fn name(&self) -> &'static str { "mistral" }
   fn template(&self) -> TemplateKey { TemplateKey::Mistral }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};

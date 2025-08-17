@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::message_log::MessageLog;
 use crate::api::clients::{AnthropicClient, GoogleClient, MistralClient, OllamaClient, OpenAIClient, PerplexityClient};
 use crate::api::traits::ApiClient as _; // trait methods on enum dispatch
-use crate::api::types::{ModelResponse, TemplateKey};
+use crate::api::types::{ModelResponse};
 
 pub enum Client {
   OpenAI(OpenAIClient),
@@ -15,28 +15,6 @@ pub enum Client {
 }
 
 impl Client {
-  pub fn name(&self) -> &'static str {
-    match self {
-      Client::OpenAI(_) => "openai",
-      Client::Google(_) => "google",
-      Client::Anthropic(_) => "anthropic",
-      Client::Perplexity(_) => "perplexity",
-      Client::Mistral(_) => "mistral",
-      Client::Ollama(_) => "ollama",
-    }
-  }
-
-  pub fn template(&self) -> TemplateKey {
-    match self {
-      Client::OpenAI(_) => TemplateKey::OpenAI,
-      Client::Google(_) => TemplateKey::Google,
-      Client::Anthropic(_) => TemplateKey::Anthropic,
-      Client::Perplexity(_) => TemplateKey::Perplexity,
-      Client::Mistral(_) => TemplateKey::Mistral,
-      Client::Ollama(_) => TemplateKey::Ollama,
-    }
-  }
-
   pub fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     match self {
       Client::OpenAI(c) => c.send_message(model, log),

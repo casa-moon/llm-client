@@ -12,7 +12,6 @@ pub struct AnthropicClient {
 impl AnthropicClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
 
 impl ApiClient for AnthropicClient {
-  fn name(&self) -> &'static str { "anthropic" }
   fn template(&self) -> TemplateKey { TemplateKey::Anthropic }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     let payload = transform_messages(log.raw(), self.template())?;

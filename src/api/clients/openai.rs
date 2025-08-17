@@ -49,7 +49,7 @@ impl OpenAIClient {
       .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
       .multipart(f)
       .send()?;
-    let mut raw: serde_json::Value = if resp.status().is_success() {
+    let raw: serde_json::Value = if resp.status().is_success() {
       resp.json()?
     } else {
       let status = resp.status();
@@ -127,7 +127,6 @@ impl OpenAIClient {
 }
 
 impl ApiClient for OpenAIClient {
-  fn name(&self) -> &'static str { "openai" }
   fn template(&self) -> TemplateKey { TemplateKey::OpenAI }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};

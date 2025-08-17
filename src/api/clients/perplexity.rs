@@ -12,7 +12,6 @@ pub struct PerplexityClient {
 impl PerplexityClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
 
 impl ApiClient for PerplexityClient {
-  fn name(&self) -> &'static str { "perplexity" }
   fn template(&self) -> TemplateKey { TemplateKey::Perplexity }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};

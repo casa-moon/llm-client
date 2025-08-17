@@ -9,7 +9,6 @@ pub struct OllamaClient {}
 impl OllamaClient { pub fn new() -> Self { Self {} } }
 
 impl ApiClient for OllamaClient {
-  fn name(&self) -> &'static str { "ollama" }
   fn template(&self) -> TemplateKey { TemplateKey::Ollama }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     let msgs = build_ollama_messages(log)?;
