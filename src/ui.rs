@@ -314,12 +314,12 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   print_colored_json(&raw_filtered);
 
   // Add to log and display
-  log.add_model(response.text.clone());
+  log.add_model(strip_think_sections(&*response.text.clone()));
   session.append_message_to_file(&format!("\n\n### {}:\n", model))?;
-  session.append_message_to_file(&response.text)?;
+  session.append_message_to_file(&*strip_think_sections(&response.text))?;
   println!("\n{}:", model);
   let skin = termimad::MadSkin::default();
-  skin.print_text(&response.text);
+  skin.print_text(&*strip_think_sections(&response.text));
   println!();
   Ok(())
 }
