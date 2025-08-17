@@ -9,6 +9,24 @@ pub struct OpenAIClient {
   pub api_key: String,
 }
 
+fn download_video_bytes(
+  http: &reqwest::blocking::Client,
+  video: &serde_json::Value,
+) -> anyhow::Result<Option<Vec<u8>>> {
+  use base64::Engine as _;
+  // Try URL first
+  if let Some(url) = video.get("url").and_then(|u| u.as_str()) {
+    let bytes = http.get(url).send()?.bytes()?;
+    return Ok(Some(bytes.to_vec()));
+  }
+  // Fallback to base64
+  if let Some(b64) = video.get("b64").and_then(|u| u.as_str()) {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64.as_bytes())?;
+    return Ok(Some(bytes));
+  }
+  Ok(None)
+}
+
 impl OpenAIClient {
   pub fn new(api_key: String) -> Self { Self { api_key } }
 
@@ -54,43 +72,15 @@ impl OpenAIClient {
     } else {
       let status = resp.status();
       let txt = resp.text().unwrap_or_default();
-      if status.as_u16() == 400 {
-        let lower = txt.to_lowercase();
-        if lower.contains("missing required parameter: 'input'") || lower.contains("unknown parameter: 'prompt'") {
-          let f2 = multipart::Form::new()
-            .text("model", model_name.clone())
-            .text("n_frames", n_frames.to_string())
-            .text("size", size_val.clone())
-            .text("input", prompt.to_string());
-          let r2 = http
-            .post(&endpoint)
-            .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
-            .multipart(f2)
-            .send()?;
-          if r2.status().is_success() { r2.json()? } else {
-            let status2 = r2.status();
-            let txt2 = r2.text().unwrap_or_default();
-            return Err(anyhow!("OpenAI Sora API error: {} - {}", status2, txt2));
-          }
-        } else {
-          return Err(anyhow!("OpenAI Sora API error: {} - {}", status, txt));
-        }
-      } else if status.as_u16() == 404 {
-        return Err(anyhow!("404:{}", endpoint));
-      } else {
-        return Err(anyhow!("OpenAI Sora API error: {} - {}", status, txt));
-      }
+      eprintln!("OpenAI Sora API error: {} - {}", status, txt);
+      return Err(anyhow!("OpenAI Sora API error"));
     };
 
     // Handle immediate URL or base64 in initial response
-    if let Some(url) = raw.get("video").and_then(|v| v.get("url")).and_then(|u| u.as_str()) {
-      // Download the file
-      let bytes = http.get(url).send()?.bytes()?;
-      return Ok(bytes.to_vec());
-    }
-    if let Some(b64) = raw.get("video").and_then(|v| v.get("b64")).and_then(|u| u.as_str()) {
-      let bytes = base64::engine::general_purpose::STANDARD.decode(b64.as_bytes())?;
-      return Ok(bytes);
+    if let Some(video) = raw.get("video") {
+      if let Some(bytes) = download_video_bytes(&http, video)? {
+        return Ok(bytes);
+      }
     }
 
     // If async job, poll by id until ready
@@ -109,13 +99,10 @@ impl OpenAIClient {
         if !r.status().is_success() { continue; }
         let st: serde_json::Value = r.json()?;
         if st.get("status").and_then(|s| s.as_str()) == Some("succeeded") {
-          if let Some(url) = st.get("video").and_then(|v| v.get("url")).and_then(|u| u.as_str()) {
-            let bytes = http.get(url).send()?.bytes()?;
-            return Ok(bytes.to_vec());
-          }
-          if let Some(b64) = st.get("video").and_then(|v| v.get("b64")).and_then(|u| u.as_str()) {
-            let bytes = base64::engine::general_purpose::STANDARD.decode(b64.as_bytes())?;
-            return Ok(bytes);
+          if let Some(video) = st.get("video") {
+            if let Some(bytes) = download_video_bytes(&http, video)? {
+              return Ok(bytes);
+            }
           }
         }
       }
