@@ -20,6 +20,7 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
     "package-lock.json",
     "Cargo.lock",
     ".idea",
+    ".env",
     ".gitignore",
     ".git",
     ".terraform",
