@@ -338,7 +338,7 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
     Ok(r) => r,
     Err(e) => {
       println!("{} {}", "Error:".red().bold(), e.to_string().red());
-      if std::env::var("RUST_BACKTRACE").is_ok() {
+      if matches!(std::env::var("RUST_BACKTRACE").ok().as_deref(), Some("true")) {
         println!("{}", "Stack trace:".bright_black());
         println!("{:#?}\n", e);
       } else {
@@ -350,12 +350,10 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   };
 
   // Print the raw response object first, excluding any `choices` key
-  let mut raw_filtered = response.raw.clone();
-  //if let serde_json::Value::Object(ref mut map) = raw_filtered {
-  //  let _ = map.remove("choices");
-  //  let _ = map.remove("candidates");
-  //}
-  print_colored_json(&raw_filtered);
+  if matches!(std::env::var("DEBUG_OUTPUT").ok().as_deref(), Some("true")) {
+    let raw_filtered = response.raw.clone();
+    print_colored_json(&raw_filtered);
+  }
 
   // Add to log and display
   log.add_model(strip_think_sections(&*response.text.clone()));
