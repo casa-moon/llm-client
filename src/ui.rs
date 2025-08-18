@@ -351,10 +351,10 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
 
   // Print the raw response object first, excluding any `choices` key
   let mut raw_filtered = response.raw.clone();
-  if let serde_json::Value::Object(ref mut map) = raw_filtered {
-    let _ = map.remove("choices");
-    let _ = map.remove("candidates");
-  }
+  //if let serde_json::Value::Object(ref mut map) = raw_filtered {
+  //  let _ = map.remove("choices");
+  //  let _ = map.remove("candidates");
+  //}
   print_colored_json(&raw_filtered);
 
   // Add to log and display
