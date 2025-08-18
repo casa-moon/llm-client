@@ -18,8 +18,8 @@ impl ApiClient for GoogleClient {
     let contents = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({
       "contents": contents,
-      "generationConfig": { "maxOutputTokens": 2048 },
     });
+    //"generationConfig": { "maxOutputTokens": 2048 },
 
     // Use v1beta endpoint and x-goog-api-key header per latest format
     let url = format!(
