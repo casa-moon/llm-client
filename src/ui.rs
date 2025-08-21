@@ -349,7 +349,7 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
     }
   };
 
-  // Print the raw response object first, excluding any `choices` key
+  // Print the raw response object first
   if matches!(std::env::var("DEBUG_OUTPUT").ok().as_deref(), Some("true")) {
     let raw_filtered = response.raw.clone();
     print_colored_json(&raw_filtered);

@@ -84,7 +84,7 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
         let b64 = base64::engine::general_purpose::STANDARD.encode(data);
         let data_url = format!("data:image/jpeg;base64,{}", b64);
 
-        session.append_message_to_file(&format!("\n- {}\n", file_path.display())).ok();
+        session.append_message_to_file(&format!("- {}", file_path.display())).ok();
         out.push((format!("image{}", image_idx), data_url, tokens));
         image_idx += 1;
       } else if filter_is_flate {
@@ -161,7 +161,7 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
         let tokens = count_image_tokens(width, height);
         let b64 = base64::engine::general_purpose::STANDARD.encode(&jpeg_buf);
         let data_url = format!("data:image/jpeg;base64,{}", b64);
-        session.append_message_to_file(&format!("\n- {}\n", file_path.display())).ok();
+        session.append_message_to_file(&format!("- {}", file_path.display())).ok();
         out.push((format!("image{}", image_idx), data_url, tokens));
         image_idx += 1;
       } else if filter_is_jpx {
@@ -173,7 +173,7 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
         let b64 = base64::engine::general_purpose::STANDARD.encode(data);
         // Most browsers/providers recognize image/jp2
         let data_url = format!("data:image/jp2;base64,{}", b64);
-        session.append_message_to_file(&format!("\n- {}\n", file_path.display())).ok();
+        session.append_message_to_file(&format!("- {}", file_path.display())).ok();
         out.push((format!("image{}", image_idx), data_url, tokens));
         image_idx += 1;
       } else {
