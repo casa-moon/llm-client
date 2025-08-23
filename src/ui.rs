@@ -1,7 +1,6 @@
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use image::{GenericImageView, ImageReader};
-use termimad; // terminal markdown rendering
 use owo_colors::OwoColorize;
 
 use crate::api::{create_client, API_CHOICES, Client, ModelResponse};
@@ -13,7 +12,7 @@ pub fn run_app() -> Result<()> {
   // choose API
   let choices: Vec<String> = API_CHOICES
     .iter()
-    .map(|c| format!("{}", c.label))
+    .map(|c| c.label.to_string())
     .collect();
   let selection = Select::new("Select API", choices).prompt()?;
 
@@ -65,12 +64,12 @@ pub fn run_app() -> Result<()> {
     match command {
       "save" => {
         // Try to summarize the chat via the active API for a filename slug
-        let mut sum_log = crate::message_log::MessageLog::new();
+        let mut sum_log = MessageLog::new();
         sum_log.extend(log.raw().clone());
         sum_log.add_user("Summarize this entire conversation in <= 256 characters to create a filename that encapsulates the essence of the content. Plain text only. No quotes. No markdown. One sentence.");
         // Show a spinner while generating the summary + renaming
         let pb = crate::spinner::start("Renaming file...");
-          let rename_result = (|| -> anyhow::Result<()> {
+          let rename_result = (|| -> Result<()> {
           let resp = client.send_message(&model, &sum_log)?;
           // Ignore any model "thinking" content wrapped in <think>...</think>
           let mut s = strip_think_sections(&resp.text).trim().to_string();
@@ -210,7 +209,7 @@ pub fn run_app() -> Result<()> {
         let res_input = Select::new("Size (resolution)", size_options.clone()).with_starting_cursor(0).prompt()?;
         // Show spinner while generating video
         let pb = crate::spinner::start("Generating Sora video...");
-        let result: anyhow::Result<std::path::PathBuf> = (|| {
+        let result: Result<std::path::PathBuf> = (|| {
           let key = std::env::var("OPENAI_API_KEY")
             .map_err(|_| anyhow::anyhow!("Missing OPENAI_API_KEY in environment"))?;
           let openai = crate::api::clients::openai::OpenAIClient::new(key);
@@ -275,7 +274,7 @@ pub fn run_app() -> Result<()> {
       }
       "git" => {
         let repo_url = Text::new("Enter git URL:").prompt()?;
-        let repo_name = repo_url.split('/').last().unwrap_or("repo");
+        let repo_name = repo_url.split('/').next_back().unwrap_or("repo");
         let local_path = session.temp_dir.join(repo_name);
         if local_path.exists() { let _ = std::fs::remove_dir_all(&local_path); }
         match git2::Repository::clone(&repo_url, &local_path) {
@@ -332,7 +331,7 @@ fn strip_think_sections(input: &str) -> String {
 fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: &mut ChatSession) -> Result<()> {
   // Show a spinner while the API call is in flight
   let pb = crate::spinner::start("Waiting for response...");
-  let result = client.send_message(model, &log);
+  let result = client.send_message(model, log);
   crate::spinner::stop(&pb);
   let response: ModelResponse = match result {
     Ok(r) => r,
@@ -356,12 +355,12 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
   }
 
   // Add to log and display
-  log.add_model(strip_think_sections(&*response.text.clone()));
+  log.add_model(strip_think_sections(&response.text.clone()));
   session.append_message_to_file(&format!("\n\n### {}:\n", model))?;
-  session.append_message_to_file(&*strip_think_sections(&response.text))?;
+  session.append_message_to_file(&strip_think_sections(&response.text))?;
   println!("\n{}:", model);
   let skin = termimad::MadSkin::default();
-  skin.print_text(&*strip_think_sections(&response.text));
+  skin.print_text(&strip_think_sections(&response.text));
   println!();
   Ok(())
 }
@@ -417,13 +416,11 @@ fn review_and_send(
   allow_directive: bool,
 ) -> Result<()> {
   // Optional directive to prepend (disabled for direct chat input)
-  if allow_directive {
-    if Confirm::new("Add a directive?").with_default(true).prompt()? {
-      let directive = Text::new("Enter a directive:").prompt()?;
-      session.append_message_to_file("\n\n***\n\n### User:\n")?;
-      session.append_message_to_file(&directive)?;
-      temp_msgs.push(Message { role: Role::User, kind: MsgType::Text, content: directive });
-    }
+  if allow_directive && Confirm::new("Add a directive?").with_default(true).prompt()? {
+    let directive = Text::new("Enter a directive:").prompt()?;
+    session.append_message_to_file("\n\n***\n\n### User:\n")?;
+    session.append_message_to_file(&directive)?;
+    temp_msgs.push(Message { role: Role::User, kind: MsgType::Text, content: directive });
   }
 
   // Token estimate for text only
@@ -481,8 +478,8 @@ fn estimate_image_tokens(url: &str, session: &mut ChatSession) -> Result<()> {
 }
 
 fn count_image_tokens(width: usize, height: usize) -> usize {
-  let h = (height + 511) / 512; // ceil
-  let w = (width + 511) / 512;
+  let h = height.div_ceil(512); // ceil
+  let w = width.div_ceil(512);
   let n = w * h;
   85 + 170 * n
 }

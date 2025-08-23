@@ -15,7 +15,7 @@ pub fn extract_text(session: &ChatSession, start_url: &str, depth: usize) -> Res
   let mut queue: VecDeque<(Url, usize)> = VecDeque::new();
   queue.push_back((base.clone(), depth));
   let mut out: Vec<Message> = Vec::new();
-
+  
   let text_sel = Selector::parse("p, h1, h2, h3, h4, h5, h6, span").unwrap();
   let link_sel = Selector::parse("a").unwrap();
 
@@ -184,8 +184,8 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
 }
 
 fn count_image_tokens(width: usize, height: usize) -> usize {
-  let h = (height + 511) / 512; // ceil
-  let w = (width + 511) / 512;
+  let h = height.div_ceil(512); // ceil
+  let w = width.div_ceil(512);
   let n = w * h;
   85 + 170 * n
 }

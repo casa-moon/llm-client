@@ -15,6 +15,6 @@ pub fn start(message: impl Into<String>) -> ProgressBar {
 }
 
 // Stop and clear the spinner (no message)
-pub fn stop(pb: &indicatif::ProgressBar) {
+pub fn stop(pb: &ProgressBar) {
   pb.finish_and_clear();
 }

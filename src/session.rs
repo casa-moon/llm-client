@@ -95,7 +95,7 @@ impl ChatSession {
       }
     }
 
-    if new_path != self.chat_file_path { std::fs::rename(&self.chat_file_path, &new_path)?; self.chat_file_path = new_path.clone(); }
+    if new_path != self.chat_file_path { fs::rename(&self.chat_file_path, &new_path)?; self.chat_file_path = new_path.clone(); }
     Ok(self.chat_file_path.clone())
   }
 
@@ -121,7 +121,7 @@ impl ChatSession {
     }
     let filename = url
       .split('/')
-      .last()
+      .next_back()
       .filter(|s| !s.is_empty())
       .unwrap_or("downloaded.file");
     let path = self.temp_dir.join(filename);
@@ -159,7 +159,7 @@ fn to_slug(s: &str) -> String {
     if ch.is_ascii_alphanumeric() {
       out.push(ch);
       last_dash = false;
-    } else if ch.is_whitespace() || matches!(ch, '-' | '_' | '/' | ':') {
+    } else if ch.is_whitespace() || matches!(ch, '-' | '_' | '/' | ':') { #[allow(clippy::collapsible_if)]
       if !last_dash && !out.is_empty() {
         out.push('-');
         last_dash = true;

@@ -10,7 +10,7 @@ pub fn http_client() -> Result<Client> {
     .and_then(|s| s.parse::<u64>().ok())
     .unwrap_or(60);
 
-  let client = reqwest::blocking::Client::builder()
+  let client = Client::builder()
     .timeout(Duration::from_secs(timeout_secs))
     .build()?;
   Ok(client)

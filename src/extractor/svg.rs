@@ -13,7 +13,7 @@ pub fn rasterize_svg_to_png_b64(session: &ChatSession, svg_bytes: &[u8]) -> Resu
     .map_err(|_| anyhow!("Failed to parse SVG"))?;
 
   let size = tree.size().to_int_size();
-  let (w, h) = (size.width() as u32, size.height() as u32);
+  let (w, h) = (size.width(), size.height());
   if w == 0 || h == 0 { return Err(anyhow!("Invalid SVG size")); }
 
   // Render with resvg into a pixmap
