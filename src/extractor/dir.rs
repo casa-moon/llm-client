@@ -60,19 +60,17 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
         }
       }
     }
-  } else {
-    if path.is_dir() {
-      for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let p = entry.path();
-        let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-        if excluded.contains(name.as_str()) { continue; }
-        if p.is_file() {
-          if let Ok(msgs) = file_extractor::extract_text(&p) {
-            out.push(Message { role: Role::User, kind: MsgType::Text, content: p.display().to_string() });
-            out.extend(msgs);
-            let _ = session.append_message_to_file(&format!("- {}", p.display()));
-          }
+  } else if path.is_dir() {
+    for entry in fs::read_dir(path)? {
+      let entry = entry?;
+      let p = entry.path();
+      let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+      if excluded.contains(name.as_str()) { continue; }
+      if p.is_file() {
+        if let Ok(msgs) = file_extractor::extract_text(&p) {
+          out.push(Message { role: Role::User, kind: MsgType::Text, content: p.display().to_string() });
+          out.extend(msgs);
+          let _ = session.append_message_to_file(&format!("- {}", p.display()));
         }
       }
     }

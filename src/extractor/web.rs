@@ -7,6 +7,7 @@ use url::Url;
 
 use crate::message_log::{Message, MsgType, Role};
 use crate::session::ChatSession;
+use crate::utils::count_image_tokens;
 
 pub fn extract_text(session: &ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
   let base = Url::parse(start_url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
@@ -16,8 +17,8 @@ pub fn extract_text(session: &ChatSession, start_url: &str, depth: usize) -> Res
   queue.push_back((base.clone(), depth));
   let mut out: Vec<Message> = Vec::new();
   
-  let text_sel = Selector::parse("p, h1, h2, h3, h4, h5, h6, span").unwrap();
-  let link_sel = Selector::parse("a").unwrap();
+  let text_sel = Selector::parse("p, h1, h2, h3, h4, h5, h6, span").map_err(|e| anyhow!(e.to_string()))?;
+  let link_sel = Selector::parse("a").map_err(|e| anyhow!(e.to_string()))?;
 
   while let Some((url, d)) = queue.pop_front() {
     let key = url.as_str().to_string();
@@ -48,23 +49,34 @@ pub fn extract_text(session: &ChatSession, start_url: &str, depth: usize) -> Res
       out.push(Message { role: Role::User, kind: MsgType::Text, content: text });
     }
 
-    if d > 0 {
-      for a in doc.select(&link_sel) {
-        if let Some(href) = a.value().attr("href") {
-          if let Ok(next) = url.join(href) {
-            if same_host(&base, &next) {
-              queue.push_back((next, d - 1));
-            }
-          }
-        }
-      }
-    }
+    enqueue_same_host_links(&base, &url, &doc, &link_sel, d, &mut queue);
   }
 
   Ok(out)
 }
 
 fn same_host(a: &Url, b: &Url) -> bool { a.domain() == b.domain() }
+
+fn enqueue_same_host_links(
+  base: &Url,
+  current: &Url,
+  doc: &Html,
+  link_sel: &Selector,
+  depth: usize,
+  queue: &mut VecDeque<(Url, usize)>,
+) {
+  if depth > 0 {
+    for a in doc.select(link_sel) {
+      if let Some(href) = a.value().attr("href") {
+        if let Ok(next) = current.join(href) {
+          if same_host(base, &next) {
+            queue.push_back((next, depth - 1));
+          }
+        }
+      }
+    }
+  }
+}
 
 pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
   let base = Url::parse(start_url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
@@ -88,8 +100,8 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
     };
     let doc = Html::parse_document(&body);
 
-    let img_sel = Selector::parse("img").unwrap();
-    let link_sel = Selector::parse("a").unwrap();
+    let img_sel = Selector::parse("img").map_err(|e| anyhow!(e.to_string()))?;
+    let link_sel = Selector::parse("a").map_err(|e| anyhow!(e.to_string()))?;
 
     let mut imgs: Vec<String> = Vec::new();
     for img in doc.select(&img_sel) {
@@ -167,25 +179,8 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
 
     if let Some(s) = spinner { s.finish_with_message(format!("Fetched {} images", fetched)); }
 
-    if d > 0 {
-      for a in doc.select(&link_sel) {
-        if let Some(href) = a.value().attr("href") {
-          if let Ok(next) = url.join(href) {
-            if same_host(&base, &next) {
-              queue.push_back((next, d - 1));
-            }
-          }
-        }
-      }
-    }
+    enqueue_same_host_links(&base, &url, &doc, &link_sel, d, &mut queue);
   }
 
   Ok(out)
-}
-
-fn count_image_tokens(width: usize, height: usize) -> usize {
-  let h = height.div_ceil(512); // ceil
-  let w = width.div_ceil(512);
-  let n = w * h;
-  85 + 170 * n
 }

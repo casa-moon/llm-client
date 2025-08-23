@@ -3,6 +3,7 @@ use base64::Engine;
 
 use crate::message_log::{Message, MsgType, Role};
 use crate::session::ChatSession;
+use crate::utils::count_image_tokens;
 
 pub fn extract_pdf(session: &mut ChatSession, path: &std::path::Path, get_images: bool) -> Result<Vec<Message>> {
   if !path.exists() { return Err(anyhow!("File not found: {}", path.display())); }
@@ -36,16 +37,15 @@ pub fn extract_pdf(session: &mut ChatSession, path: &std::path::Path, get_images
 
 fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> Result<Vec<(String, String, usize)>> {
   use lopdf::{Document, Object};
-  use image::{ImageBuffer, RgbImage, Luma};
-  use image::codecs::jpeg::JpegEncoder;
+  use image::{ImageBuffer, Luma};
   use flate2::read::ZlibDecoder;
   use std::io::Read;
   let doc = Document::load(path)?;
   let mut out: Vec<(String, String, usize)> = Vec::new();
   let mut image_idx = 1usize;
-
-  for (_obj_id, obj) in &doc.objects {
-    if let Object::Stream(stream) = obj {
+  
+  for obj in &doc.objects {
+    if let Object::Stream(stream) = obj.1 {
       let dict = &stream.dict;
       // Check /Subtype /Image
       if let Ok(Object::Name(subtype)) = dict.get(b"Subtype") { if subtype != b"Image" { continue; } } else { continue; }
@@ -105,7 +105,7 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
         // If DecodeParms with PNG predictor present, unfilter rows
         let mut data = raw;
         if let Ok(Object::Dictionary(dp)) = dict.get(b"DecodeParms") {
-          let predictor = dp.get(b"Predictor").and_then(|o| o.as_i64()).unwrap_or(1) as i64;
+          let predictor = dp.get(b"Predictor").and_then(|o| o.as_i64()).unwrap_or(1);
           if predictor == 12 || predictor == 10 || predictor == 11 || predictor == 13 || predictor == 14 || predictor == 15 {
             let colors = dp.get(b"Colors").and_then(|o| o.as_i64()).unwrap_or(channels as i64) as usize;
             let cols = dp.get(b"Columns").and_then(|o| o.as_i64()).unwrap_or(width as i64) as usize;
@@ -137,24 +137,12 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
             rgb_data.push(g.clamp(0.0, 255.0) as u8);
             rgb_data.push(b.clamp(0.0, 255.0) as u8);
           }
-          if let Some(rgb) = RgbImage::from_raw(width as u32, height as u32, rgb_data) {
-            let dynimg = image::DynamicImage::ImageRgb8(rgb);
-            let mut enc = JpegEncoder::new(&mut jpeg_buf);
-            if enc.encode_image(&dynimg).is_err() { continue; }
-          } else { continue; }
+          if !encode_rgb_from_raw(&mut jpeg_buf, width, height, rgb_data) { continue; }
         } else if channels == 3 {
-          if let Some(rgb) = RgbImage::from_raw(width as u32, height as u32, data) {
-            let dynimg = image::DynamicImage::ImageRgb8(rgb);
-            let mut enc = JpegEncoder::new(&mut jpeg_buf);
-            if enc.encode_image(&dynimg).is_err() { continue; }
-          } else { continue; }
-        } else {
-          if let Some(luma) = ImageBuffer::<Luma<u8>, _>::from_raw(width as u32, height as u32, data) {
-            let dynimg = image::DynamicImage::ImageLuma8(luma);
-            let mut enc = JpegEncoder::new(&mut jpeg_buf);
-            if enc.encode_image(&dynimg).is_err() { continue; }
-          } else { continue; }
-        }
+          if !encode_rgb_from_raw(&mut jpeg_buf, width, height, data) { continue; }
+        } else if let Some(luma) = ImageBuffer::<Luma<u8>, _>::from_raw(width as u32, height as u32, data) {
+          if !encode_to_jpeg(&mut jpeg_buf, &image::DynamicImage::ImageLuma8(luma)) { continue; }
+        } else { continue; }
 
         let file_path = session.temp_dir.join(format!("image{}.jpeg", image_idx));
         std::fs::write(&file_path, &jpeg_buf)?;
@@ -224,7 +212,7 @@ fn png_unfilter(data: &[u8], cols: usize, colors: usize) -> Option<Vec<u8>> {
           let pa = (p - a).abs();
           let pb = (p - b).abs();
           let pc = (p - c).abs();
-          let pr = if pa <= pb && pa <= pc { a } else if pb <= pc { b } else { c } as i16;
+          let pr = if pa <= pb && pa <= pc { a } else if pb <= pc { b } else { c };
           row[x] = src[x].wrapping_add(pr as u8);
         }
       }
@@ -237,9 +225,17 @@ fn png_unfilter(data: &[u8], cols: usize, colors: usize) -> Option<Vec<u8>> {
   Some(out)
 }
 
-fn count_image_tokens(width: usize, height: usize) -> usize {
-  let h = (height + 511) / 512; // ceil
-  let w = (width + 511) / 512;
-  let n = w * h;
-  85 + 170 * n
+fn encode_rgb_from_raw(jpeg_buf: &mut Vec<u8>, width: usize, height: usize, bytes: Vec<u8>) -> bool {
+  use image::RgbImage;
+  if let Some(rgb) = RgbImage::from_raw(width as u32, height as u32, bytes) {
+    encode_to_jpeg(jpeg_buf, &image::DynamicImage::ImageRgb8(rgb))
+  } else {
+    false
+  }
+}
+
+fn encode_to_jpeg(buf: &mut Vec<u8>, dynimg: &image::DynamicImage) -> bool {
+  use image::codecs::jpeg::JpegEncoder;
+  let mut enc = JpegEncoder::new(buf);
+  enc.encode_image(dynimg).is_ok()
 }

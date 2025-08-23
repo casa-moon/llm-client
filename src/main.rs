@@ -5,6 +5,7 @@ mod message_log;
 mod session;
 mod spinner;
 mod ui;
+pub mod utils;
 
 use anyhow::Result;
 use dotenvy::from_path;

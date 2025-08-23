@@ -12,7 +12,7 @@ pub struct OpenAIClient {
 fn download_video_bytes(
   http: &reqwest::blocking::Client,
   video: &serde_json::Value,
-) -> anyhow::Result<Option<Vec<u8>>> {
+) -> Result<Option<Vec<u8>>> {
   use base64::Engine as _;
   // Try URL first
   if let Some(url) = video.get("url").and_then(|u| u.as_str()) {

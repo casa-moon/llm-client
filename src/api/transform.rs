@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::message_log::{Message, MsgType, Role};
 use crate::api::types::TemplateKey;
 
-pub fn transform_messages(raw: &Vec<Message>, tmpl: TemplateKey) -> Result<serde_json::Value> {
+pub fn transform_messages(raw: &[Message], tmpl: TemplateKey) -> Result<serde_json::Value> {
   match tmpl {
     TemplateKey::OpenAI => {
       let msgs: Vec<serde_json::Value> = raw
@@ -38,20 +38,7 @@ pub fn transform_messages(raw: &Vec<Message>, tmpl: TemplateKey) -> Result<serde
           }
           Role::Model => {
             if !user_buf.is_empty() {
-              match tmpl {
-                TemplateKey::Google => out.push(serde_json::json!({
-                  "role": "user",
-                  "parts": [{"text": strip_doc_tags_if_only_one_set(&user_buf)}],
-                })),
-                TemplateKey::Perplexity | TemplateKey::Ollama => out.push(serde_json::json!({
-                  "role": "user",
-                  "content": [{"type": "text", "text": strip_doc_tags_if_only_one_set(&user_buf)}],
-                })),
-                _ => out.push(serde_json::json!({
-                  "role": "user",
-                  "content": strip_doc_tags_if_only_one_set(&user_buf),
-                })),
-              }
+              push_user_message(&mut out, tmpl, &user_buf);
               user_buf.clear();
             }
             match tmpl {
@@ -72,20 +59,7 @@ pub fn transform_messages(raw: &Vec<Message>, tmpl: TemplateKey) -> Result<serde
         }
       }
       if !user_buf.is_empty() {
-        match tmpl {
-          TemplateKey::Google => out.push(serde_json::json!({
-            "role": "user",
-            "parts": [{"text": strip_doc_tags_if_only_one_set(&user_buf)}],
-          })),
-          TemplateKey::Perplexity | TemplateKey::Ollama => out.push(serde_json::json!({
-            "role": "user",
-            "content": [{"type": "text", "text": strip_doc_tags_if_only_one_set(&user_buf)}],
-          })),
-          _ => out.push(serde_json::json!({
-            "role": "user",
-            "content": strip_doc_tags_if_only_one_set(&user_buf),
-          })),
-        }
+        push_user_message(&mut out, tmpl, &user_buf);
       }
       // For Google Gemini, ensure the last message remains a user turn.
       // Do not append synthetic "model: continue" which can confuse turn-taking.
@@ -109,5 +83,23 @@ pub(crate) fn strip_doc_tags_if_only_one_set(s: &str) -> String {
     }
   } else {
     s.to_string()
+  }
+}
+
+fn push_user_message(out: &mut Vec<serde_json::Value>, tmpl: TemplateKey, user_buf: &str) {
+  let content = strip_doc_tags_if_only_one_set(user_buf);
+  match tmpl {
+    TemplateKey::Google => out.push(serde_json::json!({
+      "role": "user",
+      "parts": [{"text": content}],
+    })),
+    TemplateKey::Perplexity | TemplateKey::Ollama => out.push(serde_json::json!({
+      "role": "user",
+      "content": [{"type": "text", "text": content}],
+    })),
+    _ => out.push(serde_json::json!({
+      "role": "user",
+      "content": content,
+    })),
   }
 }
