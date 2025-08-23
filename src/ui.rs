@@ -109,15 +109,7 @@ pub fn run_app() -> Result<()> {
       "file" => {
         let raw = Text::new("Enter path:").prompt()?;
         let path_str = normalize_path_input(&raw);
-        let path_abs = if path_str.starts_with("http://") || path_str.starts_with("https://") {
-          session.download_to_temp(&path_str)?
-        } else {
-          let path = std::path::Path::new(&path_str);
-          match std::fs::canonicalize(path) {
-            Ok(p) => p,
-            Err(_) => path.to_path_buf()
-          }
-        };
+        let path_abs = resolve_local_or_download(&session, &path_str)?;
         if !path_abs.is_file() {
           println!("\nFile not found.\n");
           continue;
@@ -234,9 +226,7 @@ pub fn run_app() -> Result<()> {
       "pdf" => {
         let raw = Text::new("Enter path:").prompt()?;
         let path_str = normalize_path_input(&raw);
-        let mut path_abs = if path_str.starts_with("http://") || path_str.starts_with("https://") {
-          session.download_to_temp(&path_str)?
-        } else { std::fs::canonicalize(&path_str).unwrap_or_else(|_| std::path::PathBuf::from(&path_str)) };
+        let mut path_abs = resolve_local_or_download(&session, &path_str)?;
         // If no .pdf extension and a sibling with .pdf exists, use it
         if path_abs.extension().map(|e| e.to_string_lossy().to_lowercase()) != Some("pdf".into()) {
           let mut candidate = path_abs.clone();
@@ -258,9 +248,7 @@ pub fn run_app() -> Result<()> {
       "xlsx" => {
         let raw = Text::new("Enter path:").prompt()?;
         let path_str = normalize_path_input(&raw);
-        let path_abs = if path_str.starts_with("http://") || path_str.starts_with("https://") {
-          session.download_to_temp(&path_str)?
-        } else { std::fs::canonicalize(&path_str).unwrap_or_else(|_| std::path::PathBuf::from(&path_str)) };
+        let path_abs = resolve_local_or_download(&session, &path_str)?;
         if !path_abs.is_file() {
           println!("\nFile not found.\n");
           continue;
@@ -491,4 +479,19 @@ fn normalize_path_input(s: &str) -> String {
   // In case users double-quote twice, strip again
   out = out.trim_matches(|c| c == '"' || c == '\'').to_string();
   out
+}
+
+// Resolve a user-supplied path or URL to a local PathBuf.
+// - For http/https URLs, downloads to the session temp dir.
+// - For local paths, returns canonical path if possible, otherwise the original path.
+fn resolve_local_or_download(session: &ChatSession, path_str: &str) -> Result<std::path::PathBuf> {
+  if path_str.starts_with("http://") || path_str.starts_with("https://") {
+    session.download_to_temp(path_str)
+  } else {
+    let path = std::path::Path::new(path_str);
+    match std::fs::canonicalize(path) {
+      Ok(p) => Ok(p),
+      Err(_) => Ok(path.to_path_buf()),
+    }
+  }
 }
