@@ -311,12 +311,10 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
                 let tokens = count_image_tokens(w as usize, h as usize);
                 session.image_token_count += tokens;
                 session.append_message_to_file(&format!("- {}", img_url)).ok();
-                out.push(Message { role: Role::User, kind: MsgType::Text, content: img_url.clone() });
                 out.push(Message { role: Role::User, kind: MsgType::Image, content: data_url });
               } else {
                 // Fallback: include original URL if rasterization fails
                 session.append_message_to_file(&format!("- {}", img_url)).ok();
-                out.push(Message { role: Role::User, kind: MsgType::Text, content: img_url.clone() });
                 out.push(Message { role: Role::User, kind: MsgType::Image, content: img_url.clone() });
               }
               continue;
@@ -331,7 +329,6 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
                 let tokens = count_image_tokens(w as usize, h as usize);
                 session.image_token_count += tokens;
                 session.append_message_to_file(&format!("- {}", img_url)).ok();
-                out.push(Message { role: Role::User, kind: MsgType::Text, content: img_url.clone() });
                 out.push(Message { role: Role::User, kind: MsgType::Image, content: img_url.clone() });
               }
             }
