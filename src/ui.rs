@@ -154,11 +154,17 @@ pub fn run_app() -> Result<()> {
         let url = Text::new("Enter URL:").prompt()?;
         let depth_input = Text::new("Depth (0-2)").with_placeholder("0").prompt()?;
         let depth: usize = depth_input.trim().parse().unwrap_or(0);
+        let render_js = Confirm::new("Render with JavaScript?").with_default(true).prompt()?;
         let get_images = Confirm::new("Get images?").with_default(false).prompt()?;
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&url)?;
         let mut total: Vec<Message> = Vec::new();
-        match crate::extractor::web::extract_text(&session, &url, depth) {
+        let text_res = if render_js {
+          crate::extractor::web::extract_text_js(&session, &url, depth)
+        } else {
+          crate::extractor::web::extract_text_basic(&session, &url, depth)
+        };
+        match text_res {
           Ok(mut msgs) => { total.append(&mut msgs); }
           Err(e) => println!("\nFailed to extract web text: {}\n", e),
         }
