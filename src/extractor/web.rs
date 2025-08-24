@@ -38,7 +38,7 @@ fn is_private_use(c: char) -> bool {
 
 fn has_alnum(s: &str) -> bool { s.chars().any(|c| c.is_alphanumeric()) }
 
-fn has_excluded_ancestor(el: &ElementRef, excluded_tags: &std::collections::HashSet<&'static str>) -> bool {
+fn has_excluded_ancestor(el: &ElementRef, excluded_tags: &HashSet<&'static str>) -> bool {
   for a in el.ancestors() {
     if let Some(v) = a.value().as_element() {
       let name: &str = v.name.local.as_ref();
@@ -48,10 +48,60 @@ fn has_excluded_ancestor(el: &ElementRef, excluded_tags: &std::collections::Hash
   false
 }
 
-pub fn extract_text(session: &ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
-  // Backwards-compatible wrapper: try JS then fall back to basic.
-  if let Ok(v) = extract_text_js(session, start_url, depth) { if !v.is_empty() { return Ok(v); } }
-  extract_text_basic(session, start_url, depth)
+// Common selectors and filters used by both basic and JS extractors.
+struct CommonSelectors {
+  primary_sel: Selector,
+  container_sel: Selector,
+  fallback_item_sel: Selector,
+  link_sel: Selector,
+  excluded: HashSet<&'static str>,
+}
+
+fn common_selectors() -> Result<CommonSelectors> {
+  Ok(CommonSelectors {
+    primary_sel: Selector::parse("article p, article h1, article h2, article h3, article h4, article h5, article h6, main p, main h1, main h2, main h3, main h4, main h5, main h6, p, h1, h2, h3, h4, h5, h6, blockquote, li")
+      .map_err(|e| anyhow!(e.to_string()))?,
+    container_sel: Selector::parse("main, article").map_err(|e| anyhow!(e.to_string()))?,
+    fallback_item_sel: Selector::parse("p, h1, h2, h3, h4, h5, h6, li, blockquote")
+      .map_err(|e| anyhow!(e.to_string()))?,
+    link_sel: Selector::parse("a").map_err(|e| anyhow!(e.to_string()))?,
+    excluded: [
+      "header", "nav", "footer", "aside", "form", "script", "style", "noscript"
+    ].into_iter().collect(),
+  })
+}
+
+fn collect_text_lines(doc: &Html, sels: &CommonSelectors) -> Vec<String> {
+  let mut lines: Vec<String> = Vec::new();
+  for el in doc.select(&sels.primary_sel) {
+    if has_excluded_ancestor(&el, &sels.excluded) { continue; }
+    let t = el.text().collect::<Vec<_>>().join(" ");
+    let t = clean_text(&t);
+    if !t.is_empty() && has_alnum(&t) { lines.push(t); }
+  }
+
+  if lines.is_empty() {
+    for container in doc.select(&sels.container_sel) {
+      for el in container.select(&sels.fallback_item_sel) {
+        if has_excluded_ancestor(&el, &sels.excluded) { continue; }
+        let t = el.text().collect::<Vec<_>>().join(" ");
+        let t = clean_text(&t);
+        if !t.is_empty() && has_alnum(&t) { lines.push(t); }
+      }
+      if !lines.is_empty() { break; }
+    }
+  }
+
+  lines
+}
+
+fn append_text_messages(session: &ChatSession, out: &mut Vec<Message>, url: &Url, text: &str) {
+  if !text.trim().is_empty() {
+    let url_s = url.as_str().to_string();
+    let _ = session.append_message_to_file(&format!("- {}", url_s));
+    out.push(Message { role: Role::User, kind: MsgType::Text, content: url_s });
+    out.push(Message { role: Role::User, kind: MsgType::Text, content: text.to_string() });
+  }
 }
 
 pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
@@ -62,13 +112,7 @@ pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) 
   queue.push_back((base.clone(), depth));
   let mut out: Vec<Message> = Vec::new();
   let pb = crate::spinner::start("Extracting text (basic)...");
-
-  let link_sel = Selector::parse("a").map_err(|e| anyhow!(e.to_string()))?;
-  let primary_sel = Selector::parse("article p, article h1, article h2, article h3, article h4, article h5, article h6, main p, main h1, main h2, main h3, main h4, main h5, main h6, p, h1, h2, h3, h4, h5, h6, blockquote, li")
-    .map_err(|e| anyhow!(e.to_string()))?;
-  let container_sel = Selector::parse("main, article").map_err(|e| anyhow!(e.to_string()))?;
-  let fallback_item_sel = Selector::parse("p, h1, h2, h3, h4, h5, h6, li, blockquote")
-    .map_err(|e| anyhow!(e.to_string()))?;
+  let sels = common_selectors()?;
 
   while let Some((url, d)) = queue.pop_front() {
     pb.set_message(format!("Extracting {}", url));
@@ -82,42 +126,11 @@ pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) 
     };
     let doc = Html::parse_document(&body);
 
-    // Exclude common chrome containers
-    let excluded: std::collections::HashSet<&'static str> = [
-      "header", "nav", "footer", "aside", "form", "script", "style", "noscript"
-    ].into_iter().collect();
-
-    // First pass: collect from targeted elements, skipping excluded ancestors
-    let mut lines: Vec<String> = Vec::new();
-    for el in doc.select(&primary_sel) {
-      if has_excluded_ancestor(&el, &excluded) { continue; }
-      let t = el.text().collect::<Vec<_>>().join(" ");
-      let t = clean_text(&t);
-      if !t.is_empty() && has_alnum(&t) { lines.push(t); }
-    }
-
-    // Fallback: look inside main/article for typical blocks
-    if lines.is_empty() {
-      for container in doc.select(&container_sel) {
-        for el in container.select(&fallback_item_sel) {
-          if has_excluded_ancestor(&el, &excluded) { continue; }
-          let t = el.text().collect::<Vec<_>>().join(" ");
-          let t = clean_text(&t);
-          if !t.is_empty() && has_alnum(&t) { lines.push(t); }
-        }
-        if !lines.is_empty() { break; }
-      }
-    }
-
+    let lines = collect_text_lines(&doc, &sels);
     let text = lines.join("\n");
-    if !text.trim().is_empty() {
-      let url_s = url.as_str().to_string();
-      let _ = session.append_message_to_file(&format!("- {}", url_s));
-      out.push(Message { role: Role::User, kind: MsgType::Text, content: url_s });
-      out.push(Message { role: Role::User, kind: MsgType::Text, content: text });
-    }
+    append_text_messages(session, &mut out, &url, &text);
 
-    enqueue_same_host_links(&base, &url, &doc, &link_sel, d, &mut queue);
+    enqueue_same_host_links(&base, &url, &doc, &sels.link_sel, d, &mut queue);
   }
 
   pb.finish_with_message(format!("Extracted {} page(s)", visited.len()));
@@ -175,15 +188,7 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
   let mut visited: HashSet<String> = HashSet::new();
   let mut queue: VecDeque<(Url, usize)> = VecDeque::new();
   queue.push_back((base.clone(), depth));
-
-  // Prepare selectors/exclusion for parsing rendered HTML
-  let primary_sel = Selector::parse("article p, article h1, article h2, article h3, article h4, article h5, article h6, main p, main h1, main h2, main h3, main h4, main h5, main h6, p, h1, h2, h3, h4, h5, h6, blockquote, li").map_err(|e| anyhow!(e.to_string()))?;
-  let container_sel = Selector::parse("main, article").map_err(|e| anyhow!(e.to_string()))?;
-  let fallback_item_sel = Selector::parse("p, h1, h2, h3, h4, h5, h6, li, blockquote").map_err(|e| anyhow!(e.to_string()))?;
-  let link_sel = Selector::parse("a").map_err(|e| anyhow!(e.to_string()))?;
-  let excluded: std::collections::HashSet<&'static str> = [
-    "header", "nav", "footer", "aside", "form", "script", "style", "noscript"
-  ].into_iter().collect();
+  let sels = common_selectors()?;
 
   while let Some((url, d)) = queue.pop_front() {
     pb.set_message(format!("Rendering {}", url));
@@ -202,41 +207,12 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
     };
 
     let doc = Html::parse_document(&content);
-    let mut lines: Vec<String> = Vec::new();
-    for el in doc.select(&primary_sel) {
-      if has_excluded_ancestor(&el, &excluded) { continue; }
-      let t = el.text().collect::<Vec<_>>().join(" ");
-      let t = clean_text(&t);
-      if !t.is_empty() && has_alnum(&t) { lines.push(t); }
-    }
-    if lines.is_empty() {
-      for container in doc.select(&container_sel) {
-        for el in container.select(&fallback_item_sel) {
-          if has_excluded_ancestor(&el, &excluded) { continue; }
-          let t = el.text().collect::<Vec<_>>().join(" ");
-          let t = clean_text(&t);
-          if !t.is_empty() && has_alnum(&t) { lines.push(t); }
-        }
-        if !lines.is_empty() { break; }
-      }
-    }
-
+    let lines = collect_text_lines(&doc, &sels);
     let text = lines.join("\n");
-    if !text.trim().is_empty() {
-      let url_s = url.as_str().to_string();
-      let _ = session.append_message_to_file(&format!("- {}", url_s));
-      out.push(Message { role: Role::User, kind: MsgType::Text, content: url_s });
-      out.push(Message { role: Role::User, kind: MsgType::Text, content: text });
-    }
+    append_text_messages(session, &mut out, &url, &text);
 
     // Enqueue same-host links from the rendered DOM
-    if d > 0 {
-      for a in doc.select(&link_sel) {
-        if let Some(href) = a.value().attr("href") {
-          if let Ok(next) = url.join(href) { if same_host(base, &next) { queue.push_back((next, d - 1)); } }
-        }
-      }
-    }
+    enqueue_same_host_links(base, &url, &doc, &sels.link_sel, d, &mut queue);
   }
 
   pb.finish_with_message(format!("Extracted {} page(s)", visited.len()));
