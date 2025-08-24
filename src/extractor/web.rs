@@ -61,6 +61,7 @@ pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) 
   let mut queue: VecDeque<(Url, usize)> = VecDeque::new();
   queue.push_back((base.clone(), depth));
   let mut out: Vec<Message> = Vec::new();
+  let pb = crate::spinner::start("Extracting text (basic)...");
 
   let link_sel = Selector::parse("a").map_err(|e| anyhow!(e.to_string()))?;
   let primary_sel = Selector::parse("article p, article h1, article h2, article h3, article h4, article h5, article h6, main p, main h1, main h2, main h3, main h4, main h5, main h6, p, h1, h2, h3, h4, h5, h6, blockquote, li")
@@ -70,6 +71,7 @@ pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) 
     .map_err(|e| anyhow!(e.to_string()))?;
 
   while let Some((url, d)) = queue.pop_front() {
+    pb.set_message(format!("Extracting {}", url));
     let key = url.as_str().to_string();
     if visited.contains(&key) { continue; }
     visited.insert(key.clone());
@@ -118,6 +120,7 @@ pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) 
     enqueue_same_host_links(&base, &url, &doc, &link_sel, d, &mut queue);
   }
 
+  pb.finish_with_message(format!("Extracted {} page(s)", visited.len()));
   Ok(out)
 }
 
@@ -157,6 +160,7 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
   use std::time::Duration;
 
   let mut out: Vec<Message> = Vec::new();
+  let pb = crate::spinner::start("Extracting text (JS)...");
 
   // Spin up headless Chrome (requires Chrome/Chromium installed)
   let launch_opts = LaunchOptionsBuilder::default()
@@ -182,6 +186,7 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
   ].into_iter().collect();
 
   while let Some((url, d)) = queue.pop_front() {
+    pb.set_message(format!("Rendering {}", url));
     let key = url.as_str().to_string();
     if visited.contains(&key) { continue; }
     visited.insert(key.clone());
@@ -234,6 +239,7 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
     }
   }
 
+  pb.finish_with_message(format!("Extracted {} page(s)", visited.len()));
   Ok(out)
 }
 
