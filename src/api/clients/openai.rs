@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
 
-use crate::message_log::MessageLog;
 use crate::api::traits::ApiClient;
 use crate::api::transform::transform_messages;
 use crate::api::types::{ModelResponse, TemplateKey};
+use crate::message_log::MessageLog;
 
 pub struct OpenAIClient {
   pub api_key: String,
@@ -28,7 +28,9 @@ fn download_video_bytes(
 }
 
 impl OpenAIClient {
-  pub fn new(api_key: String) -> Self { Self { api_key } }
+  pub fn new(api_key: String) -> Self {
+    Self { api_key }
+  }
 
   // Sora video generation helper
   pub fn generate_sora_video(
@@ -38,8 +40,8 @@ impl OpenAIClient {
     fps: Option<u32>,
     resolution: Option<&str>,
   ) -> Result<Vec<u8>> {
-    use reqwest::header::AUTHORIZATION;
     use reqwest::blocking::multipart;
+    use reqwest::header::AUTHORIZATION;
     let http = crate::http::http_client()?;
     let model_name = std::env::var("OPENAI_SORA_MODEL").unwrap_or_else(|_| "sora-1".to_string());
     let endpoint = std::env::var("OPENAI_SORA_ENDPOINT")
@@ -83,7 +85,11 @@ impl OpenAIClient {
     }
 
     // If async job, poll by id until ready
-    if let Some(id) = raw.get("id").and_then(|s| s.as_str()).map(|s| s.to_string()) {
+    if let Some(id) = raw
+      .get("id")
+      .and_then(|s| s.as_str())
+      .map(|s| s.to_string())
+    {
       // Best-effort polling within overall request timeout
       use std::thread;
       use std::time::Duration;
@@ -95,7 +101,9 @@ impl OpenAIClient {
           .get(&poll_url)
           .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
           .send()?;
-        if !r.status().is_success() { continue; }
+        if !r.status().is_success() {
+          continue;
+        }
         let st: serde_json::Value = r.json()?;
         if st.get("status").and_then(|s| s.as_str()) == Some("succeeded") {
           if let Some(video) = st.get("video") {
@@ -113,7 +121,9 @@ impl OpenAIClient {
 }
 
 impl ApiClient for OpenAIClient {
-  fn template(&self) -> TemplateKey { TemplateKey::OpenAI }
+  fn template(&self) -> TemplateKey {
+    TemplateKey::OpenAI
+  }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 

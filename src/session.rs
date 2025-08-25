@@ -21,7 +21,11 @@ impl ChatSession {
     } else {
       home_dir().ok_or_else(|| anyhow::anyhow!("No home directory found"))?
     };
-    let chatgpt_dir = if is_termux { "llm-client" } else { ".llm-client" };
+    let chatgpt_dir = if is_termux {
+      "llm-client"
+    } else {
+      ".llm-client"
+    };
 
     let files_dir = home.join(chatgpt_dir).join("files");
     let temp_dir = home.join(chatgpt_dir).join("temp");
@@ -62,7 +66,10 @@ impl ChatSession {
       let _ = fs::remove_file(&self.chat_file_path);
       println!("\nChat transcript deleted.\n");
     } else if self.chat_file_path.exists() && save {
-      println!("\nChat transcript saved to {}\n", self.chat_file_path.to_string_lossy());
+      println!(
+        "\nChat transcript saved to {}\n",
+        self.chat_file_path.to_string_lossy()
+      );
     }
     if self.temp_dir.exists() {
       let _ = fs::remove_dir_all(&self.temp_dir);
@@ -73,12 +80,18 @@ impl ChatSession {
   // Rename the chat file to include a short summary slug of the conversation.
   // Returns the new path (or original if unchanged).
   pub fn rename_with_summary(&mut self, summary: &str) -> Result<PathBuf> {
-    if !self.chat_file_path.exists() { return Ok(self.chat_file_path.clone()); }
+    if !self.chat_file_path.exists() {
+      return Ok(self.chat_file_path.clone());
+    }
     let summary = summary.trim();
-    if summary.is_empty() { return Ok(self.chat_file_path.clone()); }
+    if summary.is_empty() {
+      return Ok(self.chat_file_path.clone());
+    }
 
     let slug = to_slug(summary);
-    if slug.is_empty() { return Ok(self.chat_file_path.clone()); }
+    if slug.is_empty() {
+      return Ok(self.chat_file_path.clone());
+    }
     let new_name = format!("{}.md", slug);
     let mut new_path = self.chat_file_dir.join(&new_name);
 
@@ -91,18 +104,25 @@ impl ChatSession {
           break;
         }
         i += 1;
-        if i > 50 { break; }
+        if i > 50 {
+          break;
+        }
       }
     }
 
-    if new_path != self.chat_file_path { fs::rename(&self.chat_file_path, &new_path)?; self.chat_file_path = new_path.clone(); }
+    if new_path != self.chat_file_path {
+      fs::rename(&self.chat_file_path, &new_path)?;
+      self.chat_file_path = new_path.clone();
+    }
     Ok(self.chat_file_path.clone())
   }
 
   pub fn copy_file_to_dir<P: AsRef<Path>>(&self, src: P) -> Result<PathBuf> {
     let src_path = src.as_ref();
     let dest = self.dir.join(
-      src_path.file_name().ok_or_else(|| anyhow::anyhow!("Invalid file name"))?,
+      src_path
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("Invalid file name"))?,
     );
     if src_path != dest {
       fs::copy(src_path, &dest)?;
@@ -135,14 +155,20 @@ impl ChatSession {
     use std::io::Write;
     let slug = to_slug_like(name_hint);
     let timestamp = Utc::now().to_rfc3339().replace(":", "-");
-    let base = if slug.is_empty() { format!("video-{}", timestamp) } else { format!("{}-{}", slug, timestamp) };
+    let base = if slug.is_empty() {
+      format!("video-{}", timestamp)
+    } else {
+      format!("{}-{}", slug, timestamp)
+    };
     let mut path = self.videos_dir.join(format!("{}.{}", base, ext));
     // Ensure uniqueness if somehow collides
     let mut i = 2;
     while path.exists() {
       path = self.videos_dir.join(format!("{}-{}.{}", base, i, ext));
       i += 1;
-      if i > 50 { break; }
+      if i > 50 {
+        break;
+      }
     }
     let mut f = fs::File::create(&path)?;
     f.write_all(bytes)?;
@@ -159,15 +185,20 @@ fn to_slug(s: &str) -> String {
     if ch.is_ascii_alphanumeric() {
       out.push(ch);
       last_dash = false;
-    } else if ch.is_whitespace() || matches!(ch, '-' | '_' | '/' | ':') { #[allow(clippy::collapsible_if)]
+    } else if ch.is_whitespace() || matches!(ch, '-' | '_' | '/' | ':') {
+      #[allow(clippy::collapsible_if)]
       if !last_dash && !out.is_empty() {
         out.push('-');
         last_dash = true;
         words += 1;
-        if words >= 8 { break; }
+        if words >= 8 {
+          break;
+        }
       }
     }
-    if out.len() >= 48 { break; }
+    if out.len() >= 48 {
+      break;
+    }
   }
   out.trim_matches('-').to_string()
 }

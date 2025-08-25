@@ -10,10 +10,16 @@ pub struct GoogleClient {
   pub api_key: String,
 }
 
-impl GoogleClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
+impl GoogleClient {
+  pub fn new(api_key: String) -> Self {
+    Self { api_key }
+  }
+}
 
 impl ApiClient for GoogleClient {
-  fn template(&self) -> TemplateKey { TemplateKey::Google }
+  fn template(&self) -> TemplateKey {
+    TemplateKey::Google
+  }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     let contents = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({

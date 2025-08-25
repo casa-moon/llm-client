@@ -16,5 +16,9 @@ pub fn extract_text<P: AsRef<Path>>(path: P) -> Result<Vec<Message>> {
     Err(_) => return Err(anyhow!("File is not valid UTF-8: {}", path.display())),
   };
 
-  Ok(vec![Message { role: Role::User, kind: MsgType::Text, content }])
+  Ok(vec![Message {
+    role: Role::User,
+    kind: MsgType::Text,
+    content,
+  }])
 }

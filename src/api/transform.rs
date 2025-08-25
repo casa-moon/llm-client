@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use crate::message_log::{Message, MsgType, Role};
 use crate::api::types::TemplateKey;
+use crate::message_log::{Message, MsgType, Role};
 
 pub fn transform_messages(raw: &[Message], tmpl: TemplateKey) -> Result<serde_json::Value> {
   match tmpl {
@@ -27,7 +27,11 @@ pub fn transform_messages(raw: &[Message], tmpl: TemplateKey) -> Result<serde_js
         .collect();
       Ok(serde_json::Value::Array(msgs))
     }
-    TemplateKey::Anthropic | TemplateKey::Google | TemplateKey::Mistral | TemplateKey::Perplexity | TemplateKey::Ollama => {
+    TemplateKey::Anthropic
+    | TemplateKey::Google
+    | TemplateKey::Mistral
+    | TemplateKey::Perplexity
+    | TemplateKey::Ollama => {
       let mut out: Vec<serde_json::Value> = Vec::new();
       let mut user_buf = String::new();
       for m in raw.iter() {

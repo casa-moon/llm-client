@@ -1,19 +1,16 @@
 use anyhow::Result;
-use inquire::{Confirm, Select, Text};
 use image::{GenericImageView, ImageReader};
+use inquire::{Confirm, Select, Text};
 use owo_colors::OwoColorize;
 
-use crate::api::{create_client, API_CHOICES, Client, ModelResponse};
+use crate::api::{create_client, Client, ModelResponse, API_CHOICES};
+use crate::extractor::file as file_extractor;
 use crate::message_log::{Message, MessageLog, MsgType, Role};
 use crate::session::ChatSession;
-use crate::extractor::file as file_extractor;
 
 pub fn run_app() -> Result<()> {
   // choose API
-  let choices: Vec<String> = API_CHOICES
-    .iter()
-    .map(|c| c.label.to_string())
-    .collect();
+  let choices: Vec<String> = API_CHOICES.iter().map(|c| c.label.to_string()).collect();
   let selection = Select::new("Select API", choices).prompt()?;
 
   // Map back to key by label position
@@ -58,7 +55,7 @@ pub fn run_app() -> Result<()> {
       "Select command",
       commands.iter().map(|(n, _)| n.to_string()).collect(),
     )
-      .prompt()?;
+    .prompt()?;
 
     let command = commands.iter().find(|(n, _)| n == &choice).unwrap().1;
     match command {
@@ -69,12 +66,14 @@ pub fn run_app() -> Result<()> {
         sum_log.add_user("Summarize this entire conversation in <= 256 characters to create a filename that encapsulates the essence of the content. Plain text only. No quotes. No markdown. One sentence.");
         // Show a spinner while generating the summary + renaming
         let pb = crate::spinner::start("Renaming file...");
-          let rename_result = (|| -> Result<()> {
+        let rename_result = (|| -> Result<()> {
           let resp = client.send_message(&model, &sum_log)?;
           // Ignore any model "thinking" content wrapped in <think>...</think>
           let mut s = strip_think_sections(&resp.text).trim().to_string();
           // Keep it within 256 chars on char boundaries
-          if s.chars().count() > 256 { s = s.chars().take(256).collect(); }
+          if s.chars().count() > 256 {
+            s = s.chars().take(256).collect();
+          }
           session.rename_with_summary(&s)?;
           Ok(())
         })();
@@ -93,17 +92,35 @@ pub fn run_app() -> Result<()> {
         let input = Text::new("Chat input:").prompt()?;
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&input)?;
-        let temp_msgs = vec![Message { role: Role::User, kind: MsgType::Text, content: input }];
-        review_and_send(temp_msgs, &mut client, &model, &mut log, &mut session, false)?;
+        let temp_msgs = vec![Message {
+          role: Role::User,
+          kind: MsgType::Text,
+          content: input,
+        }];
+        review_and_send(
+          temp_msgs,
+          &mut client,
+          &model,
+          &mut log,
+          &mut session,
+          false,
+        )?;
       }
       "multi" => {
-        let input = match dialoguer::Editor::new().require_save(false).edit("\n# Enter multi-line input below\n") {
+        let input = match dialoguer::Editor::new()
+          .require_save(false)
+          .edit("\n# Enter multi-line input below\n")
+        {
           Ok(Some(s)) => s,
           _ => Text::new("Multi-line input:").prompt()?,
         };
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&input)?;
-        let temp_msgs = vec![Message { role: Role::User, kind: MsgType::Text, content: input }];
+        let temp_msgs = vec![Message {
+          role: Role::User,
+          kind: MsgType::Text,
+          content: input,
+        }];
         review_and_send(temp_msgs, &mut client, &model, &mut log, &mut session, true)?;
       }
       "file" => {
@@ -136,7 +153,7 @@ pub fn run_app() -> Result<()> {
         let path = std::path::Path::new(&path_str);
         let path_abs = match std::fs::canonicalize(path) {
           Ok(p) => p,
-          Err(_) => path.to_path_buf()
+          Err(_) => path.to_path_buf(),
         };
         if !path_abs.is_dir() {
           println!("\nDirectory not found.\n");
@@ -146,7 +163,9 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&path_abs.to_string_lossy())?;
         match crate::extractor::dir::extract_dir(&session, &path_abs, recursive) {
-          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
+          Ok(msgs) => {
+            review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
+          }
           Err(e) => println!("\nFailed to extract directory: {}\n", e),
         }
       }
@@ -154,7 +173,9 @@ pub fn run_app() -> Result<()> {
         let url = Text::new("Enter URL:").prompt()?;
         let depth_input = Text::new("Depth (0-2)").with_placeholder("0").prompt()?;
         let depth: usize = depth_input.trim().parse().unwrap_or(0);
-        let render_js = Confirm::new("Render with JavaScript?").with_default(true).prompt()?;
+        let render_js = Confirm::new("Render with JavaScript?")
+          .with_default(true)
+          .prompt()?;
         let get_images = Confirm::new("Get images?").with_default(false).prompt()?;
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&url)?;
@@ -165,13 +186,17 @@ pub fn run_app() -> Result<()> {
           crate::extractor::web::extract_text_basic(&session, &url, depth)
         };
         match text_res {
-          Ok(mut msgs) => { total.append(&mut msgs); }
+          Ok(mut msgs) => {
+            total.append(&mut msgs);
+          }
           Err(e) => println!("\nFailed to extract web text: {}\n", e),
         }
         if get_images {
           session.image_token_count = 0; // reset before counting
           match crate::extractor::web::extract_images(&mut session, &url, depth) {
-            Ok(mut msgs) => { total.append(&mut msgs); }
+            Ok(mut msgs) => {
+              total.append(&mut msgs);
+            }
             Err(e) => println!("\nFailed to extract web images: {}\n", e),
           }
         }
@@ -182,7 +207,9 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&url)?;
         // estimate tokens by fetching image dims
-        if let Err(e) = estimate_image_tokens(&url, &mut session) { println!("Warning: could not estimate image tokens: {}", e); }
+        if let Err(e) = estimate_image_tokens(&url, &mut session) {
+          println!("Warning: could not estimate image tokens: {}", e);
+        }
         let msgs = crate::extractor::image::extract_image(&url)?;
         review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
       }
@@ -197,21 +224,23 @@ pub fn run_app() -> Result<()> {
           .prompt()?;
         let fps: u32 = fps_input.trim().parse().unwrap_or(24);
         let size_options = vec![
-          "1280x720",
-          "720x1280",
-          "896x512",
-          "512x896",
-          "640x352",
-          "352x640",
+          "1280x720", "720x1280", "896x512", "512x896", "640x352", "352x640",
         ];
-        let res_input = Select::new("Size (resolution)", size_options.clone()).with_starting_cursor(0).prompt()?;
+        let res_input = Select::new("Size (resolution)", size_options.clone())
+          .with_starting_cursor(0)
+          .prompt()?;
         // Show spinner while generating video
         let pb = crate::spinner::start("Generating Sora video...");
         let result: Result<std::path::PathBuf> = (|| {
           let key = std::env::var("OPENAI_API_KEY")
             .map_err(|_| anyhow::anyhow!("Missing OPENAI_API_KEY in environment"))?;
           let openai = crate::api::clients::openai::OpenAIClient::new(key);
-          let bytes = openai.generate_sora_video(&prompt_text, Some(duration), Some(fps), Some(res_input.trim()))?;
+          let bytes = openai.generate_sora_video(
+            &prompt_text,
+            Some(duration),
+            Some(fps),
+            Some(res_input.trim()),
+          )?;
           let path = session.save_video_bytes(&prompt_text, "mp4", &bytes)?;
           Ok(path)
         })();
@@ -234,10 +263,16 @@ pub fn run_app() -> Result<()> {
         let path_str = normalize_path_input(&raw);
         let mut path_abs = resolve_local_or_download(&session, &path_str)?;
         // If no .pdf extension and a sibling with .pdf exists, use it
-        if path_abs.extension().map(|e| e.to_string_lossy().to_lowercase()) != Some("pdf".into()) {
+        if path_abs
+          .extension()
+          .map(|e| e.to_string_lossy().to_lowercase())
+          != Some("pdf".into())
+        {
           let mut candidate = path_abs.clone();
           candidate.set_extension("pdf");
-          if candidate.exists() { path_abs = candidate; }
+          if candidate.exists() {
+            path_abs = candidate;
+          }
         }
         if !path_abs.is_file() {
           println!("\nFile not found.\n");
@@ -247,7 +282,9 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&path_abs.to_string_lossy())?;
         match crate::extractor::pdf::extract_pdf(&mut session, &path_abs, get_images) {
-          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
+          Ok(msgs) => {
+            review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
+          }
           Err(e) => println!("\nFailed to extract pdf: {}\n", e),
         }
       }
@@ -262,7 +299,9 @@ pub fn run_app() -> Result<()> {
         session.append_message_to_file("\n\n***\n\n### User:\n")?;
         session.append_message_to_file(&path_abs.to_string_lossy())?;
         match crate::extractor::xlsx::extract_xlsx(&path_abs) {
-          Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
+          Ok(msgs) => {
+            review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
+          }
           Err(e) => println!("\nFailed to extract xlsx: {}\n", e),
         }
       }
@@ -270,13 +309,17 @@ pub fn run_app() -> Result<()> {
         let repo_url = Text::new("Enter git URL:").prompt()?;
         let repo_name = repo_url.split('/').next_back().unwrap_or("repo");
         let local_path = session.temp_dir.join(repo_name);
-        if local_path.exists() { let _ = std::fs::remove_dir_all(&local_path); }
+        if local_path.exists() {
+          let _ = std::fs::remove_dir_all(&local_path);
+        }
         match git2::Repository::clone(&repo_url, &local_path) {
           Ok(_) => {
             session.append_message_to_file("\n\n***\n\n### User:\n")?;
             session.append_message_to_file(&repo_url)?;
             match crate::extractor::dir::extract_dir(&session, &local_path, true) {
-              Ok(msgs) => { review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?; }
+              Ok(msgs) => {
+                review_and_send(msgs, &mut client, &model, &mut log, &mut session, true)?;
+              }
               Err(e) => println!("\nFailed to extract git repo: {}\n", e),
             }
           }
@@ -322,7 +365,12 @@ fn strip_think_sections(input: &str) -> String {
   out
 }
 
-fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: &mut ChatSession) -> Result<()> {
+fn handle_send(
+  client: &mut Client,
+  model: &str,
+  log: &mut MessageLog,
+  session: &mut ChatSession,
+) -> Result<()> {
   // Show a spinner while the API call is in flight
   let pb = crate::spinner::start("Waiting for response...");
   let result = client.send_message(model, log);
@@ -331,11 +379,17 @@ fn handle_send(client: &mut Client, model: &str, log: &mut MessageLog, session: 
     Ok(r) => r,
     Err(e) => {
       println!("{} {}", "Error:".red().bold(), e.to_string().red());
-      if matches!(std::env::var("RUST_BACKTRACE").ok().as_deref(), Some("true")) {
+      if matches!(
+        std::env::var("RUST_BACKTRACE").ok().as_deref(),
+        Some("true")
+      ) {
         println!("{}", "Stack trace:".bright_black());
         println!("{:#?}\n", e);
       } else {
-        println!("{}", "(set RUST_BACKTRACE=1 to see a stack trace)".bright_black());
+        println!(
+          "{}",
+          "(set RUST_BACKTRACE=1 to see a stack trace)".bright_black()
+        );
       }
       // Keep the app running after an API failure
       return Ok(());
@@ -364,23 +418,38 @@ fn print_colored_json(value: &serde_json::Value) {
     let pad = |n: usize| -> String { " ".repeat(n) };
     match v {
       serde_json::Value::Null => out.push_str(&format!("{}", "null".bright_black())),
-      serde_json::Value::Bool(b) => out.push_str(&format!("{}", if *b { "true".magenta() } else { "false".magenta() })),
+      serde_json::Value::Bool(b) => out.push_str(&format!(
+        "{}",
+        if *b {
+          "true".magenta()
+        } else {
+          "false".magenta()
+        }
+      )),
       serde_json::Value::Number(n) => out.push_str(&format!("{}", n.to_string().yellow())),
       serde_json::Value::String(s) => out.push_str(&format!("\"{}\"", s.green())),
       serde_json::Value::Array(arr) => {
-        if arr.is_empty() { out.push_str("[]"); return; }
+        if arr.is_empty() {
+          out.push_str("[]");
+          return;
+        }
         out.push_str("[\n");
         for (i, item) in arr.iter().enumerate() {
           out.push_str(&pad(indent + 2));
           helper(item, indent + 2, out);
-          if i + 1 != arr.len() { out.push(','); }
+          if i + 1 != arr.len() {
+            out.push(',');
+          }
           out.push('\n');
         }
         out.push_str(&pad(indent));
         out.push(']');
       }
       serde_json::Value::Object(map) => {
-        if map.is_empty() { out.push_str("{}"); return; }
+        if map.is_empty() {
+          out.push_str("{}");
+          return;
+        }
         out.push_str("{\n");
         let len = map.len();
         for (idx, (k, val)) in map.iter().enumerate() {
@@ -388,7 +457,9 @@ fn print_colored_json(value: &serde_json::Value) {
           out.push_str(&format!("\"{}\"", k.bright_blue()));
           out.push_str(": ");
           helper(val, indent + 2, out);
-          if idx + 1 != len { out.push(','); }
+          if idx + 1 != len {
+            out.push(',');
+          }
           out.push('\n');
         }
         out.push_str(&pad(indent));
@@ -410,30 +481,49 @@ fn review_and_send(
   allow_directive: bool,
 ) -> Result<()> {
   // Optional directive to prepend (disabled for direct chat input)
-  if allow_directive && Confirm::new("Add a directive?").with_default(true).prompt()? {
+  if allow_directive
+    && Confirm::new("Add a directive?")
+      .with_default(true)
+      .prompt()?
+  {
     let directive = Text::new("Enter a directive:").prompt()?;
     session.append_message_to_file("\n\n***\n\n### User:\n")?;
     session.append_message_to_file(&directive)?;
-    temp_msgs.push(Message { role: Role::User, kind: MsgType::Text, content: directive });
+    temp_msgs.push(Message {
+      role: Role::User,
+      kind: MsgType::Text,
+      content: directive,
+    });
   }
 
   // Token estimate for text only
   let text_tokens = estimate_text_tokens_for_msgs(&temp_msgs);
   let text_cost = (text_tokens as f64) / 1000.0 * 0.01;
-  println!("This text data is ~{} tokens and ~${:.2}.", text_tokens, text_cost);
+  println!(
+    "This text data is ~{} tokens and ~${:.2}.",
+    text_tokens, text_cost
+  );
 
   // Image token count if maintained elsewhere
   if session.image_token_count > 0 {
     let img_cost = (session.image_token_count as f64) / 1000.0 * 0.01;
-    println!("This image data is ~{} tokens and ~${:.2}.", session.image_token_count, img_cost);
+    println!(
+      "This image data is ~{} tokens and ~${:.2}.",
+      session.image_token_count, img_cost
+    );
   }
 
-  if Confirm::new("Display the data?").with_default(false).prompt()? {
+  if Confirm::new("Display the data?")
+    .with_default(false)
+    .prompt()?
+  {
     let json = serde_json::to_string_pretty(&temp_msgs)?;
     println!("\n{}\n", json);
   }
 
-  let proceed = Confirm::new("Do you want to send it?").with_default(true).prompt()?;
+  let proceed = Confirm::new("Do you want to send it?")
+    .with_default(true)
+    .prompt()?;
   if !proceed {
     println!("\nMessage not sent.");
     return Ok(());
@@ -447,16 +537,23 @@ fn review_and_send(
 fn estimate_text_tokens_for_msgs(msgs: &[Message]) -> usize {
   use tiktoken_rs::cl100k_base;
   let enc = cl100k_base().expect("load tokenizer");
-  let text_only: Vec<&Message> = msgs.iter().filter(|m| matches!(m.kind, MsgType::Text)).collect();
+  let text_only: Vec<&Message> = msgs
+    .iter()
+    .filter(|m| matches!(m.kind, MsgType::Text))
+    .collect();
   let s = serde_json::to_string(&text_only).unwrap_or_default();
   enc.encode_with_special_tokens(&s).len()
 }
 
 fn estimate_image_tokens(url: &str, session: &mut ChatSession) -> Result<()> {
-  if !(url.starts_with("http://") || url.starts_with("https://")) { return Ok(()); }
+  if !(url.starts_with("http://") || url.starts_with("https://")) {
+    return Ok(());
+  }
   let client = crate::http::http_client()?;
   let resp = client.get(url).send()?;
-  if !resp.status().is_success() { return Ok(()); }
+  if !resp.status().is_success() {
+    return Ok(());
+  }
   let bytes = resp.bytes()?;
   let reader = ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format();
   if let Ok(rdr) = reader {

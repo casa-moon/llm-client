@@ -5,15 +5,26 @@ use crate::message_log::{Message, MsgType, Role};
 use crate::session::ChatSession;
 use crate::utils::count_image_tokens;
 
-pub fn extract_pdf(session: &mut ChatSession, path: &std::path::Path, get_images: bool) -> Result<Vec<Message>> {
-  if !path.exists() { return Err(anyhow!("File not found: {}", path.display())); }
+pub fn extract_pdf(
+  session: &mut ChatSession,
+  path: &std::path::Path,
+  get_images: bool,
+) -> Result<Vec<Message>> {
+  if !path.exists() {
+    return Err(anyhow!("File not found: {}", path.display()));
+  }
 
   let pb = crate::spinner::start("Extracting PDF text...");
-  let text = pdf_extract::extract_text(path).map_err(|e| anyhow!("Failed to extract text from PDF: {}", e))?;
+  let text = pdf_extract::extract_text(path)
+    .map_err(|e| anyhow!("Failed to extract text from PDF: {}", e))?;
   crate::spinner::stop(&pb);
-  
+
   let mut out = Vec::new();
-  out.push(Message { role: Role::User, kind: MsgType::Text, content: text });
+  out.push(Message {
+    role: Role::User,
+    kind: MsgType::Text,
+    content: text,
+  });
   if get_images {
     // Try extracting embedded images (DCTDecode only)
     let pb = crate::spinner::start("Extracting PDF images...");
@@ -21,54 +32,83 @@ pub fn extract_pdf(session: &mut ChatSession, path: &std::path::Path, get_images
       Ok(mut imgs) => {
         crate::spinner::stop(&pb);
         for (label, data_url, tokens) in imgs.drain(..) {
-          out.push(Message { role: Role::User, kind: MsgType::Text, content: label });
-          out.push(Message { role: Role::User, kind: MsgType::Image, content: data_url });
+          out.push(Message {
+            role: Role::User,
+            kind: MsgType::Text,
+            content: label,
+          });
+          out.push(Message {
+            role: Role::User,
+            kind: MsgType::Image,
+            content: data_url,
+          });
           session.image_token_count += tokens;
         }
       }
       Err(e) => {
         crate::spinner::stop(&pb);
-        out.push(Message { role: Role::User, kind: MsgType::Text, content: format!("[Failed to extract PDF images: {}]", e) });
+        out.push(Message {
+          role: Role::User,
+          kind: MsgType::Text,
+          content: format!("[Failed to extract PDF images: {}]", e),
+        });
       }
     }
   }
   Ok(out)
 }
 
-fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> Result<Vec<(String, String, usize)>> {
-  use lopdf::{Document, Object};
-  use image::{ImageBuffer, Luma};
+fn extract_pdf_images_dct(
+  session: &mut ChatSession,
+  path: &std::path::Path,
+) -> Result<Vec<(String, String, usize)>> {
   use flate2::read::ZlibDecoder;
+  use image::{ImageBuffer, Luma};
+  use lopdf::{Document, Object};
   use std::io::Read;
   let doc = Document::load(path)?;
   let mut out: Vec<(String, String, usize)> = Vec::new();
   let mut image_idx = 1usize;
-  
+
   for obj in &doc.objects {
     if let Object::Stream(stream) = obj.1 {
       let dict = &stream.dict;
       // Check /Subtype /Image
-      if let Ok(Object::Name(subtype)) = dict.get(b"Subtype") { if subtype != b"Image" { continue; } } else { continue; }
+      if let Ok(Object::Name(subtype)) = dict.get(b"Subtype") {
+        if subtype != b"Image" {
+          continue;
+        }
+      } else {
+        continue;
+      }
 
       // width/height
       let width = dict.get(b"Width").and_then(|o| o.as_i64()).unwrap_or(0) as usize;
       let height = dict.get(b"Height").and_then(|o| o.as_i64()).unwrap_or(0) as usize;
-      if width == 0 || height == 0 { continue; }
+      if width == 0 || height == 0 {
+        continue;
+      }
 
       // Detect filters
       let filter_is_dct = match dict.get(b"Filter").ok() {
         Some(Object::Name(name)) => name == b"DCTDecode",
-        Some(Object::Array(arr)) => arr.iter().any(|o| matches!(o, Object::Name(n) if n == b"DCTDecode")),
+        Some(Object::Array(arr)) => arr
+          .iter()
+          .any(|o| matches!(o, Object::Name(n) if n == b"DCTDecode")),
         _ => false,
       };
       let filter_is_flate = match dict.get(b"Filter").ok() {
         Some(Object::Name(name)) => name == b"FlateDecode",
-        Some(Object::Array(arr)) => arr.iter().any(|o| matches!(o, Object::Name(n) if n == b"FlateDecode")),
+        Some(Object::Array(arr)) => arr
+          .iter()
+          .any(|o| matches!(o, Object::Name(n) if n == b"FlateDecode")),
         _ => false,
       };
       let filter_is_jpx = match dict.get(b"Filter").ok() {
         Some(Object::Name(name)) => name == b"JPXDecode",
-        Some(Object::Array(arr)) => arr.iter().any(|o| matches!(o, Object::Name(n) if n == b"JPXDecode")),
+        Some(Object::Array(arr)) => arr
+          .iter()
+          .any(|o| matches!(o, Object::Name(n) if n == b"JPXDecode")),
         _ => false,
       };
 
@@ -84,40 +124,76 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
         let b64 = base64::engine::general_purpose::STANDARD.encode(data);
         let data_url = format!("data:image/jpeg;base64,{}", b64);
 
-        session.append_message_to_file(&format!("- {}", file_path.display())).ok();
+        session
+          .append_message_to_file(&format!("- {}", file_path.display()))
+          .ok();
         out.push((format!("image{}", image_idx), data_url, tokens));
         image_idx += 1;
       } else if filter_is_flate {
         // FlateDecode with or without PNG predictors
-        let bpc = dict.get(b"BitsPerComponent").and_then(|o| o.as_i64()).unwrap_or(8) as usize;
-        if bpc != 8 { continue; }
+        let bpc = dict
+          .get(b"BitsPerComponent")
+          .and_then(|o| o.as_i64())
+          .unwrap_or(8) as usize;
+        if bpc != 8 {
+          continue;
+        }
         let channels = match dict.get(b"ColorSpace").ok() {
           Some(Object::Name(cs)) if cs == b"DeviceRGB" => 3usize,
           Some(Object::Name(cs)) if cs == b"DeviceGray" => 1usize,
           Some(Object::Name(cs)) if cs == b"DeviceCMYK" => 4usize,
-          Some(Object::Array(arr)) if arr.first().and_then(|o| o.as_name().ok()) == Some(b"ICCBased") => 3usize,
+          Some(Object::Array(arr))
+            if arr.first().and_then(|o| o.as_name().ok()) == Some(b"ICCBased") =>
+          {
+            3usize
+          }
           _ => continue,
         };
         let mut decoder = ZlibDecoder::new(&stream.content[..]);
         let mut raw = Vec::new();
-        if decoder.read_to_end(&mut raw).is_err() { continue; }
+        if decoder.read_to_end(&mut raw).is_err() {
+          continue;
+        }
 
         // If DecodeParms with PNG predictor present, unfilter rows
         let mut data = raw;
         if let Ok(Object::Dictionary(dp)) = dict.get(b"DecodeParms") {
           let predictor = dp.get(b"Predictor").and_then(|o| o.as_i64()).unwrap_or(1);
-          if predictor == 12 || predictor == 10 || predictor == 11 || predictor == 13 || predictor == 14 || predictor == 15 {
-            let colors = dp.get(b"Colors").and_then(|o| o.as_i64()).unwrap_or(channels as i64) as usize;
-            let cols = dp.get(b"Columns").and_then(|o| o.as_i64()).unwrap_or(width as i64) as usize;
-            let bpc_dp = dp.get(b"BitsPerComponent").and_then(|o| o.as_i64()).unwrap_or(bpc as i64) as usize;
-            if bpc_dp != 8 { continue; }
+          if predictor == 12
+            || predictor == 10
+            || predictor == 11
+            || predictor == 13
+            || predictor == 14
+            || predictor == 15
+          {
+            let colors = dp
+              .get(b"Colors")
+              .and_then(|o| o.as_i64())
+              .unwrap_or(channels as i64) as usize;
+            let cols = dp
+              .get(b"Columns")
+              .and_then(|o| o.as_i64())
+              .unwrap_or(width as i64) as usize;
+            let bpc_dp = dp
+              .get(b"BitsPerComponent")
+              .and_then(|o| o.as_i64())
+              .unwrap_or(bpc as i64) as usize;
+            if bpc_dp != 8 {
+              continue;
+            }
             if colors != channels { /* assume given colors */ }
-            if let Some(unfiltered) = png_unfilter(&data, cols, colors) { data = unfiltered; } else { continue; }
+            if let Some(unfiltered) = png_unfilter(&data, cols, colors) {
+              data = unfiltered;
+            } else {
+              continue;
+            }
           }
         }
 
         let expected = width * height * channels;
-        if data.len() < expected { continue; }
+        if data.len() < expected {
+          continue;
+        }
         data.truncate(expected);
 
         let mut jpeg_buf: Vec<u8> = Vec::new();
@@ -125,7 +201,9 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
           // Convert CMYK to RGB
           let mut rgb_data = Vec::with_capacity(width * height * 3);
           for i in (0..data.len()).step_by(4) {
-            if i + 3 >= data.len() { break; }
+            if i + 3 >= data.len() {
+              break;
+            }
             let c = data[i] as f32 / 255.0;
             let m = data[i + 1] as f32 / 255.0;
             let y = data[i + 2] as f32 / 255.0;
@@ -137,19 +215,31 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
             rgb_data.push(g.clamp(0.0, 255.0) as u8);
             rgb_data.push(b.clamp(0.0, 255.0) as u8);
           }
-          if !encode_rgb_from_raw(&mut jpeg_buf, width, height, rgb_data) { continue; }
+          if !encode_rgb_from_raw(&mut jpeg_buf, width, height, rgb_data) {
+            continue;
+          }
         } else if channels == 3 {
-          if !encode_rgb_from_raw(&mut jpeg_buf, width, height, data) { continue; }
-        } else if let Some(luma) = ImageBuffer::<Luma<u8>, _>::from_raw(width as u32, height as u32, data) {
-          if !encode_to_jpeg(&mut jpeg_buf, &image::DynamicImage::ImageLuma8(luma)) { continue; }
-        } else { continue; }
+          if !encode_rgb_from_raw(&mut jpeg_buf, width, height, data) {
+            continue;
+          }
+        } else if let Some(luma) =
+          ImageBuffer::<Luma<u8>, _>::from_raw(width as u32, height as u32, data)
+        {
+          if !encode_to_jpeg(&mut jpeg_buf, &image::DynamicImage::ImageLuma8(luma)) {
+            continue;
+          }
+        } else {
+          continue;
+        }
 
         let file_path = session.temp_dir.join(format!("image{}.jpeg", image_idx));
         std::fs::write(&file_path, &jpeg_buf)?;
         let tokens = count_image_tokens(width, height);
         let b64 = base64::engine::general_purpose::STANDARD.encode(&jpeg_buf);
         let data_url = format!("data:image/jpeg;base64,{}", b64);
-        session.append_message_to_file(&format!("- {}", file_path.display())).ok();
+        session
+          .append_message_to_file(&format!("- {}", file_path.display()))
+          .ok();
         out.push((format!("image{}", image_idx), data_url, tokens));
         image_idx += 1;
       } else if filter_is_jpx {
@@ -161,7 +251,9 @@ fn extract_pdf_images_dct(session: &mut ChatSession, path: &std::path::Path) -> 
         let b64 = base64::engine::general_purpose::STANDARD.encode(data);
         // Most browsers/providers recognize image/jp2
         let data_url = format!("data:image/jp2;base64,{}", b64);
-        session.append_message_to_file(&format!("- {}", file_path.display())).ok();
+        session
+          .append_message_to_file(&format!("- {}", file_path.display()))
+          .ok();
         out.push((format!("image{}", image_idx), data_url, tokens));
         image_idx += 1;
       } else {
@@ -182,28 +274,38 @@ fn png_unfilter(data: &[u8], cols: usize, colors: usize) -> Option<Vec<u8>> {
   while i < data.len() {
     let filter = *data.get(i)?;
     i += 1;
-    if i + row_bytes > data.len() { return None; }
+    if i + row_bytes > data.len() {
+      return None;
+    }
     let mut row = vec![0u8; row_bytes];
     let src = &data[i..i + row_bytes];
     match filter {
-      0 => { row.copy_from_slice(src); }
-      1 => { // Sub
+      0 => {
+        row.copy_from_slice(src);
+      }
+      1 => {
+        // Sub
         for x in 0..row_bytes {
           let left = if x >= bpp { row[x - bpp] } else { 0 };
           row[x] = src[x].wrapping_add(left);
         }
       }
-      2 => { // Up
-        for x in 0..row_bytes { row[x] = src[x].wrapping_add(prev[x]); }
+      2 => {
+        // Up
+        for x in 0..row_bytes {
+          row[x] = src[x].wrapping_add(prev[x]);
+        }
       }
-      3 => { // Average
+      3 => {
+        // Average
         for x in 0..row_bytes {
           let left = if x >= bpp { row[x - bpp] } else { 0 };
           let up = prev[x];
           row[x] = src[x].wrapping_add(((left as u16 + up as u16) / 2) as u8);
         }
       }
-      4 => { // Paeth
+      4 => {
+        // Paeth
         for x in 0..row_bytes {
           let a = if x >= bpp { row[x - bpp] } else { 0 } as i16;
           let b = prev[x] as i16;
@@ -212,7 +314,13 @@ fn png_unfilter(data: &[u8], cols: usize, colors: usize) -> Option<Vec<u8>> {
           let pa = (p - a).abs();
           let pb = (p - b).abs();
           let pc = (p - c).abs();
-          let pr = if pa <= pb && pa <= pc { a } else if pb <= pc { b } else { c };
+          let pr = if pa <= pb && pa <= pc {
+            a
+          } else if pb <= pc {
+            b
+          } else {
+            c
+          };
           row[x] = src[x].wrapping_add(pr as u8);
         }
       }
@@ -225,7 +333,12 @@ fn png_unfilter(data: &[u8], cols: usize, colors: usize) -> Option<Vec<u8>> {
   Some(out)
 }
 
-fn encode_rgb_from_raw(jpeg_buf: &mut Vec<u8>, width: usize, height: usize, bytes: Vec<u8>) -> bool {
+fn encode_rgb_from_raw(
+  jpeg_buf: &mut Vec<u8>,
+  width: usize,
+  height: usize,
+  bytes: Vec<u8>,
+) -> bool {
   use image::RgbImage;
   if let Some(rgb) = RgbImage::from_raw(width as u32, height as u32, bytes) {
     encode_to_jpeg(jpeg_buf, &image::DynamicImage::ImageRgb8(rgb))

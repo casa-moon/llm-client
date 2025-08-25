@@ -1,18 +1,24 @@
 use anyhow::{anyhow, Result};
 
-use crate::message_log::MessageLog;
 use crate::api::traits::ApiClient;
 use crate::api::transform::transform_messages;
 use crate::api::types::{ModelResponse, TemplateKey};
+use crate::message_log::MessageLog;
 
 pub struct AnthropicClient {
   pub api_key: String,
 }
 
-impl AnthropicClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
+impl AnthropicClient {
+  pub fn new(api_key: String) -> Self {
+    Self { api_key }
+  }
+}
 
 impl ApiClient for AnthropicClient {
-  fn template(&self) -> TemplateKey { TemplateKey::Anthropic }
+  fn template(&self) -> TemplateKey {
+    TemplateKey::Anthropic
+  }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     let payload = transform_messages(log.raw(), self.template())?;
     let body = serde_json::json!({
@@ -41,7 +47,8 @@ impl ApiClient for AnthropicClient {
   // Override extractor for Anthropic response format
   fn extract_text(&self, raw: &serde_json::Value) -> String {
     raw
-      .get("content").and_then(|c| c.get(0))
+      .get("content")
+      .and_then(|c| c.get(0))
       .and_then(|p| p.get("text"))
       .and_then(|s| s.as_str())
       .unwrap_or_default()

@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
 
+use crate::api::client::Client;
 use crate::api::clients::{
   AnthropicClient, GoogleClient, MistralClient, OllamaClient, OpenAIClient, PerplexityClient,
 };
-use crate::api::client::Client;
 use crate::api::types::{ApiChoice, API_CHOICES};
 
 pub fn create_client(choice_key: &str) -> Result<(Client, String)> {
@@ -12,8 +12,7 @@ pub fn create_client(choice_key: &str) -> Result<(Client, String)> {
     .find(|c| c.key == choice_key)
     .ok_or_else(|| anyhow!("Invalid API choice: {}", choice_key))?;
 
-  let env_val = std::env::var(cfg.env)
-    .map_err(|_| anyhow!("Missing API key for {}", cfg.env))?;
+  let env_val = std::env::var(cfg.env).map_err(|_| anyhow!("Missing API key for {}", cfg.env))?;
 
   let client = match cfg.key {
     "1" | "2" => Client::OpenAI(OpenAIClient::new(env_val)),

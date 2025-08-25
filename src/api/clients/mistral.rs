@@ -1,18 +1,24 @@
 use anyhow::{anyhow, Result};
 
-use crate::message_log::MessageLog;
 use crate::api::traits::ApiClient;
 use crate::api::transform::transform_messages;
 use crate::api::types::{ModelResponse, TemplateKey};
+use crate::message_log::MessageLog;
 
 pub struct MistralClient {
   pub api_key: String,
 }
 
-impl MistralClient { pub fn new(api_key: String) -> Self { Self { api_key } } }
+impl MistralClient {
+  pub fn new(api_key: String) -> Self {
+    Self { api_key }
+  }
+}
 
 impl ApiClient for MistralClient {
-  fn template(&self) -> TemplateKey { TemplateKey::Mistral }
+  fn template(&self) -> TemplateKey {
+    TemplateKey::Mistral
+  }
   fn send_message(&mut self, model: &str, log: &MessageLog) -> Result<ModelResponse> {
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
     let payload = transform_messages(log.raw(), self.template())?;

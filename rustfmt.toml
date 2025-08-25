@@ -1,0 +1,2 @@
+hard_tabs = false      # use spaces, not tabs
+tab_spaces = 2         # number of spaces per tab

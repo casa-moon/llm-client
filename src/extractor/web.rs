@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Context, Result};
-use std::io::Cursor;
 use image::{GenericImageView, ImageReader};
 use scraper::{ElementRef, Html, Selector};
 use std::collections::{HashSet, VecDeque};
+use std::io::Cursor;
 use url::Url;
 
 use crate::message_log::{Message, MsgType, Role};
@@ -16,9 +16,14 @@ fn clean_text(input: &str) -> String {
     // Normalize NBSP to space
     let c = if ch == '\u{00A0}' { ' ' } else { ch };
     // Skip private-use area glyphs often used by icon fonts
-    if is_private_use(c) { continue; }
+    if is_private_use(c) {
+      continue;
+    }
     // Allow newline, convert other control chars to space
-    if c.is_control() && c != '\n' { out.push(' '); continue; }
+    if c.is_control() && c != '\n' {
+      out.push(' ');
+      continue;
+    }
     out.push(c);
   }
   // Collapse whitespace sequences and trim per-line
@@ -33,16 +38,22 @@ fn clean_text(input: &str) -> String {
 
 fn is_private_use(c: char) -> bool {
   let u = c as u32;
-  (0xE000..=0xF8FF).contains(&u) || (0xF0000..=0xFFFFD).contains(&u) || (0x100000..=0x10FFFD).contains(&u)
+  (0xE000..=0xF8FF).contains(&u)
+    || (0xF0000..=0xFFFFD).contains(&u)
+    || (0x100000..=0x10FFFD).contains(&u)
 }
 
-fn has_alnum(s: &str) -> bool { s.chars().any(|c| c.is_alphanumeric()) }
+fn has_alnum(s: &str) -> bool {
+  s.chars().any(|c| c.is_alphanumeric())
+}
 
 fn has_excluded_ancestor(el: &ElementRef, excluded_tags: &HashSet<&'static str>) -> bool {
   for a in el.ancestors() {
     if let Some(v) = a.value().as_element() {
       let name: &str = v.name.local.as_ref();
-      if excluded_tags.contains(name) { return true; }
+      if excluded_tags.contains(name) {
+        return true;
+      }
     }
   }
   false
@@ -74,21 +85,31 @@ fn common_selectors() -> Result<CommonSelectors> {
 fn collect_text_lines(doc: &Html, sels: &CommonSelectors) -> Vec<String> {
   let mut lines: Vec<String> = Vec::new();
   for el in doc.select(&sels.primary_sel) {
-    if has_excluded_ancestor(&el, &sels.excluded) { continue; }
+    if has_excluded_ancestor(&el, &sels.excluded) {
+      continue;
+    }
     let t = el.text().collect::<Vec<_>>().join(" ");
     let t = clean_text(&t);
-    if !t.is_empty() && has_alnum(&t) { lines.push(t); }
+    if !t.is_empty() && has_alnum(&t) {
+      lines.push(t);
+    }
   }
 
   if lines.is_empty() {
     for container in doc.select(&sels.container_sel) {
       for el in container.select(&sels.fallback_item_sel) {
-        if has_excluded_ancestor(&el, &sels.excluded) { continue; }
+        if has_excluded_ancestor(&el, &sels.excluded) {
+          continue;
+        }
         let t = el.text().collect::<Vec<_>>().join(" ");
         let t = clean_text(&t);
-        if !t.is_empty() && has_alnum(&t) { lines.push(t); }
+        if !t.is_empty() && has_alnum(&t) {
+          lines.push(t);
+        }
       }
-      if !lines.is_empty() { break; }
+      if !lines.is_empty() {
+        break;
+      }
     }
   }
 
@@ -99,12 +120,24 @@ fn append_text_messages(session: &ChatSession, out: &mut Vec<Message>, url: &Url
   if !text.trim().is_empty() {
     let url_s = url.as_str().to_string();
     let _ = session.append_message_to_file(&format!("- {}", url_s));
-    out.push(Message { role: Role::User, kind: MsgType::Text, content: url_s });
-    out.push(Message { role: Role::User, kind: MsgType::Text, content: text.to_string() });
+    out.push(Message {
+      role: Role::User,
+      kind: MsgType::Text,
+      content: url_s,
+    });
+    out.push(Message {
+      role: Role::User,
+      kind: MsgType::Text,
+      content: text.to_string(),
+    });
   }
 }
 
-pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
+pub fn extract_text_basic(
+  session: &ChatSession,
+  start_url: &str,
+  depth: usize,
+) -> Result<Vec<Message>> {
   let base = Url::parse(start_url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
   let client = crate::http::http_client()?;
   let mut visited: HashSet<String> = HashSet::new();
@@ -117,11 +150,16 @@ pub fn extract_text_basic(session: &ChatSession, start_url: &str, depth: usize) 
   while let Some((url, d)) = queue.pop_front() {
     pb.set_message(format!("Extracting {}", url));
     let key = url.as_str().to_string();
-    if visited.contains(&key) { continue; }
+    if visited.contains(&key) {
+      continue;
+    }
     visited.insert(key.clone());
 
     let body = match client.get(url.as_str()).send() {
-      Ok(resp) if resp.status().is_success() => match resp.text() { Ok(t) => t, Err(_) => continue },
+      Ok(resp) if resp.status().is_success() => match resp.text() {
+        Ok(t) => t,
+        Err(_) => continue,
+      },
       _ => continue,
     };
     let doc = Html::parse_document(&body);
@@ -183,7 +221,10 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
   let browser = Browser::new(launch_opts).context("launch headless chrome")?;
   let tab = browser.new_tab().context("open new tab")?;
 
-  let wait_ms: u64 = std::env::var("JS_RENDER_WAIT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(1200);
+  let wait_ms: u64 = std::env::var("JS_RENDER_WAIT_MS")
+    .ok()
+    .and_then(|s| s.parse().ok())
+    .unwrap_or(1200);
 
   let mut visited: HashSet<String> = HashSet::new();
   let mut queue: VecDeque<(Url, usize)> = VecDeque::new();
@@ -193,10 +234,15 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
   while let Some((url, d)) = queue.pop_front() {
     pb.set_message(format!("Rendering {}", url));
     let key = url.as_str().to_string();
-    if visited.contains(&key) { continue; }
+    if visited.contains(&key) {
+      continue;
+    }
     visited.insert(key.clone());
 
-    if let Err(e) = tab.navigate_to(url.as_str()) { eprintln!("[web:js] navigate error {}: {}", url, e); continue; }
+    if let Err(e) = tab.navigate_to(url.as_str()) {
+      eprintln!("[web:js] navigate error {}: {}", url, e);
+      continue;
+    }
     // Basic ready-state wait
     let _ = tab.wait_for_element("body");
     std::thread::sleep(Duration::from_millis(wait_ms));
@@ -219,12 +265,20 @@ fn extract_text_js_inner(session: &ChatSession, base: &Url, depth: usize) -> Res
   Ok(out)
 }
 
-pub fn extract_text_js(session: &ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
+pub fn extract_text_js(
+  session: &ChatSession,
+  start_url: &str,
+  depth: usize,
+) -> Result<Vec<Message>> {
   let base = Url::parse(start_url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
   extract_text_js_inner(session, &base, depth)
 }
 
-pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) -> Result<Vec<Message>> {
+pub fn extract_images(
+  session: &mut ChatSession,
+  start_url: &str,
+  depth: usize,
+) -> Result<Vec<Message>> {
   let base = Url::parse(start_url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
   let client = crate::http::http_client()?;
   let mut visited: HashSet<String> = HashSet::new();
@@ -234,15 +288,19 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
 
   while let Some((url, d)) = queue.pop_front() {
     let key = url.as_str().to_string();
-    if visited.contains(&key) { continue; }
+    if visited.contains(&key) {
+      continue;
+    }
     visited.insert(key.clone());
 
     let resp = client.get(url.as_str()).send();
     let Ok(resp) = resp else { continue };
-    if !resp.status().is_success() { continue; }
+    if !resp.status().is_success() {
+      continue;
+    }
     let body = match resp.text() {
       Ok(t) => t,
-      Err(_) => continue
+      Err(_) => continue,
     };
     let doc = Html::parse_document(&body);
 
@@ -267,37 +325,66 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
     let spinner = if total > 0 {
       let s = crate::spinner::start(format!("Fetching {} images from {}", total, url));
       Some(s)
-    } else { None };
+    } else {
+      None
+    };
 
     for img_url in imgs {
       // avoid re-processing the same image URL
-      if visited.contains(&img_url) { continue; }
+      if visited.contains(&img_url) {
+        continue;
+      }
       visited.insert(img_url.clone());
 
       // Attempt to fetch image and get dimensions
-      if let Some(s) = &spinner { s.set_message(format!("Fetching image {}/{}", fetched + 1, total)); }
+      if let Some(s) = &spinner {
+        s.set_message(format!("Fetching image {}/{}", fetched + 1, total));
+      }
       if let Ok(resp) = client.get(&img_url).send() {
         if resp.status().is_success() {
-          let ct = resp.headers().get(reqwest::header::CONTENT_TYPE)
+          let ct = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_ascii_lowercase());
           if let Ok(bytes) = resp.bytes() {
             let is_svg = img_url.to_ascii_lowercase().ends_with(".svg")
-              || ct.as_deref().map(|s| s.contains("image/svg+xml")).unwrap_or(false)
-              || std::str::from_utf8(&bytes).map(|s| s.trim_start().starts_with("<svg")).unwrap_or(false);
+              || ct
+                .as_deref()
+                .map(|s| s.contains("image/svg+xml"))
+                .unwrap_or(false)
+              || std::str::from_utf8(&bytes)
+                .map(|s| s.trim_start().starts_with("<svg"))
+                .unwrap_or(false);
 
             if is_svg {
               // Rasterize to PNG and embed as data URL
-              if let Ok((data_url, w, h)) = crate::extractor::svg::rasterize_svg_to_png_b64(session, &bytes) {
-                if w < 200 || h < 200 { continue; }
+              if let Ok((data_url, w, h)) =
+                crate::extractor::svg::rasterize_svg_to_png_b64(session, &bytes)
+              {
+                if w < 200 || h < 200 {
+                  continue;
+                }
                 let tokens = count_image_tokens(w as usize, h as usize);
                 session.image_token_count += tokens;
-                session.append_message_to_file(&format!("- {}", img_url)).ok();
-                out.push(Message { role: Role::User, kind: MsgType::Image, content: data_url });
+                session
+                  .append_message_to_file(&format!("- {}", img_url))
+                  .ok();
+                out.push(Message {
+                  role: Role::User,
+                  kind: MsgType::Image,
+                  content: data_url,
+                });
               } else {
                 // Fallback: include original URL if rasterization fails
-                session.append_message_to_file(&format!("- {}", img_url)).ok();
-                out.push(Message { role: Role::User, kind: MsgType::Image, content: img_url.clone() });
+                session
+                  .append_message_to_file(&format!("- {}", img_url))
+                  .ok();
+                out.push(Message {
+                  role: Role::User,
+                  kind: MsgType::Image,
+                  content: img_url.clone(),
+                });
               }
               continue;
             }
@@ -306,12 +393,20 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
             if let Ok(rdr) = reader {
               if let Ok(img) = rdr.decode() {
                 let (w, h) = img.dimensions();
-                if w < 200 || h < 200 { continue; }
+                if w < 200 || h < 200 {
+                  continue;
+                }
                 // token estimate following JS heuristic
                 let tokens = count_image_tokens(w as usize, h as usize);
                 session.image_token_count += tokens;
-                session.append_message_to_file(&format!("- {}", img_url)).ok();
-                out.push(Message { role: Role::User, kind: MsgType::Image, content: img_url.clone() });
+                session
+                  .append_message_to_file(&format!("- {}", img_url))
+                  .ok();
+                out.push(Message {
+                  role: Role::User,
+                  kind: MsgType::Image,
+                  content: img_url.clone(),
+                });
               }
             }
           }
@@ -320,7 +415,9 @@ pub fn extract_images(session: &mut ChatSession, start_url: &str, depth: usize) 
       fetched += 1;
     }
 
-    if let Some(s) = spinner { s.finish_with_message(format!("Fetched {} images", fetched)); }
+    if let Some(s) = spinner {
+      s.finish_with_message(format!("Fetched {} images", fetched));
+    }
 
     enqueue_same_host_links(&base, &url, &doc, &link_sel, d, &mut queue);
   }

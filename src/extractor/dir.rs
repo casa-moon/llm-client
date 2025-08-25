@@ -29,10 +29,10 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
     ".releaserc.json",
     "CHANGELOG.md",
     "LICENSE",
-    "target"
+    "target",
   ]
-    .into_iter()
-    .collect();
+  .into_iter()
+  .collect();
 
   if recursive {
     // Use filter_entry to prune excluded directories from traversal
@@ -40,19 +40,27 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
       .into_iter()
       .filter_entry(|e| {
         // Always include the root; apply exclusions to children
-        if e.depth() == 0 { return true; }
+        if e.depth() == 0 {
+          return true;
+        }
         let name = e.file_name().to_str().unwrap_or("");
         !excluded.contains(name)
       })
       .filter_map(|e| e.ok())
     {
       let p = entry.path();
-      if p.is_dir() { continue; }
+      if p.is_dir() {
+        continue;
+      }
       if p.is_file() {
         match file_extractor::extract_text(p) {
           Ok(msgs) => {
             // add file path then its contents
-            out.push(Message { role: Role::User, kind: MsgType::Text, content: p.display().to_string() });
+            out.push(Message {
+              role: Role::User,
+              kind: MsgType::Text,
+              content: p.display().to_string(),
+            });
             out.extend(msgs);
             let _ = session.append_message_to_file(&format!("- {}", p.display()));
           }
@@ -64,11 +72,21 @@ pub fn extract_dir(session: &ChatSession, path: &Path, recursive: bool) -> Resul
     for entry in fs::read_dir(path)? {
       let entry = entry?;
       let p = entry.path();
-      let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-      if excluded.contains(name.as_str()) { continue; }
+      let name = p
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+      if excluded.contains(name.as_str()) {
+        continue;
+      }
       if p.is_file() {
         if let Ok(msgs) = file_extractor::extract_text(&p) {
-          out.push(Message { role: Role::User, kind: MsgType::Text, content: p.display().to_string() });
+          out.push(Message {
+            role: Role::User,
+            kind: MsgType::Text,
+            content: p.display().to_string(),
+          });
           out.extend(msgs);
           let _ = session.append_message_to_file(&format!("- {}", p.display()));
         }
