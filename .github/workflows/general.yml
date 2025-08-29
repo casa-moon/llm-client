@@ -85,3 +85,12 @@ jobs:
         with:
           name: "Coverage report"
           path: coverage/
+          
+  security_audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@cargo-deny
+      - name: Scan for vulnerabilities
+        run: cargo deny check advisories
